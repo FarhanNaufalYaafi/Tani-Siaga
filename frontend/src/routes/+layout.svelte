@@ -95,7 +95,7 @@
 	async function toggleNotifications() {
 		if (browser && !window.isSecureContext) {
 			notificationState = 'unsupported';
-			await showAlert('Notifikasi web di HP memerlukan koneksi HTTPS. Alamat lokal melalui Wi-Fi (http://192.168.x.x) tidak dapat meminta izin push notification.', {
+			await showAlert('Notifikasi web memerlukan koneksi HTTPS. Browser tidak mendukung izin push notification melalui HTTP biasa.', {
 				title: 'Notifikasi memerlukan HTTPS',
 				tone: 'warning',
 			});

@@ -16,9 +16,7 @@ async function bootstrap() {
   app.enableCors({
     origin: [
       'http://localhost:5173',
-      'http://192.168.1.7:5173',
       'http://localhost:5174',
-      'http://192.168.1.7:5174',
     ],
     credentials: true,
   });
@@ -44,7 +42,7 @@ app.use((req, res, next) => {
   SwaggerModule.setup('api', app, document);
 
   const port = 3000;
-  await app.listen(port, '0.0.0.0');
+  await app.listen(port, 'localhost');
   logger.log('Tani Siaga API running on http://localhost:' + port + ' (Swagger: /api)');
   logger.log('Frontend CORS origin: http://localhost:5173');
 
