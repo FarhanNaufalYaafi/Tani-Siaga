@@ -265,161 +265,94 @@
   <title>{group ? group.name : 'Detail Kelompok Tani'} | Tani Siaga</title>
 </svelte:head>
 
-<div class="min-h-screen bg-dark-bg text-text-primary p-4 sm:p-6 lg:p-8 font-sans">
-  <div class="max-w-4xl mx-auto space-y-6">
-
-    <a href="/kelompok-tani" class="inline-flex items-center text-xs text-brand-accent hover:underline gap-1">
-      &larr; Kembali ke Daftar Kelompok Tani
-    </a>
+<main class="page-shell">
+  <div class="page-container">
+    <a href="/kelompok-tani" class="back-link">← Kembali ke Daftar Kelompok Tani</a>
 
     {#if isLoading}
-      <div class="bg-dark-surface border border-brand-primary/30 p-8 rounded-2xl animate-pulse space-y-4">
-        <div class="h-8 bg-brand-primary/30 rounded w-1/2"></div>
-        <div class="h-4 bg-brand-primary/20 rounded w-1/4"></div>
-        <div class="h-20 bg-brand-primary/20 rounded w-full"></div>
+      <div class="state loading-card" aria-label="Memuat detail kelompok tani">
+        <span></span><span></span><span></span>
       </div>
     {:else if errorMessage}
-      <div class="bg-dark-surface border border-status-danger/40 p-8 rounded-2xl text-center space-y-3">
-        <p class="text-status-danger text-sm">⚠️ {errorMessage}</p>
-        <a href="/kelompok-tani" class="inline-block text-xs bg-brand-primary px-4 py-2 rounded-lg text-text-primary">
-          Kembali
-        </a>
+      <div class="state error-state" role="alert">
+        <p>{errorMessage}</p>
+        <a href="/kelompok-tani" class="secondary-button">Kembali ke daftar</a>
       </div>
     {:else if group}
-      <div class="bg-dark-surface border border-brand-primary/40 rounded-2xl p-6 sm:p-8 space-y-6 shadow-xl">
-
-        <!-- Header Detail & Action Buttons -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-brand-primary/30 pb-6">
-          <div>
-            <div class="flex items-center gap-2">
-              <h1 class="text-2xl sm:text-3xl font-bold text-text-primary">{group.name}</h1>
-              {#if isLeader}
-                <span class="bg-brand-secondary/20 text-brand-secondary text-xs px-2.5 py-1 rounded-md font-semibold border border-brand-secondary/40">
-                  Ketua (Anda)
-                </span>
-              {/if}
+      <article class="detail-card">
+        <header class="detail-heading">
+          <div class="group-identity">
+            <p class="eyebrow">KELOMPOK TANI</p>
+            <div class="title-row">
+              <h1>{group.name}</h1>
+              {#if isLeader}<span class="leader-badge">Ketua (Anda)</span>{/if}
             </div>
-            <p class="text-xs text-brand-accent mt-1">
-              ID Poktan: {group.poktan_id || 'Belum Terverifikasi'}
-            </p>
+            <p class="group-code">ID Poktan · {group.poktan_id || 'Belum terverifikasi'}</p>
           </div>
 
-          <!-- Pilihan Tombol Tergantung Role (Leader, Regular Member, or Common User) -->
           {#if isLeader}
-            <div class="flex flex-wrap gap-2">
-              <button
-                onclick={openPendingModal}
-                class="bg-status-warning/20 border border-status-warning/50 text-status-warning hover:bg-status-warning/30 text-xs font-semibold px-3 py-2.5 rounded-xl transition flex items-center gap-1.5"
-              >
-                <span>⏳ Menunggu Persetujuan Ketua</span>
-              </button>
-
-              <button
-                onclick={handleAddMember}
-                class="bg-brand-secondary hover:bg-brand-secondary/90 text-text-primary text-xs font-semibold px-3.5 py-2.5 rounded-xl transition"
-              >
-                ➕ Tambahkan Anggota
-              </button>
+            <div class="header-actions">
+              <button type="button" class="warning-button" onclick={openPendingModal}>Menunggu persetujuan</button>
+              <button type="button" class="primary-button" onclick={handleAddMember}>+ Tambahkan anggota</button>
             </div>
           {:else if isRegularMember}
-            <button
-              onclick={handleLeaveGroup}
-              disabled={isLeaving}
-              class="btn-leave-top"
-            >
-              {isLeaving ? 'Memproses...' : '🚪 Keluar Kelompok'}
+            <button type="button" class="danger-button" onclick={handleLeaveGroup} disabled={isLeaving}>
+              {isLeaving ? 'Memproses...' : 'Keluar kelompok'}
             </button>
           {:else if isPending}
-            <span class="bg-status-warning/15 border border-status-warning/40 text-status-warning font-semibold text-xs px-4 py-2.5 rounded-xl self-start sm:self-auto">
-              ⏳ Menunggu Respon
-            </span>
+            <span class="pending-badge">Menunggu respons</span>
           {:else}
-            <button
-              onclick={handleApply}
-              disabled={isApplying}
-              class="bg-brand-secondary hover:bg-brand-secondary/90 text-text-primary font-semibold text-xs px-5 py-2.5 rounded-xl transition disabled:opacity-50 self-start sm:self-auto"
-            >
-              {isApplying ? 'Mengajukan...' : applicationStatus === 'rejected' ? 'Ajukan Bergabung Kembali' : 'Ajukan Bergabung'}
+            <button type="button" class="primary-button" onclick={handleApply} disabled={isApplying}>
+              {isApplying ? 'Mengajukan...' : applicationStatus === 'rejected' ? 'Ajukan bergabung kembali' : 'Ajukan bergabung'}
             </button>
           {/if}
+        </header>
+
+        <div class="info-grid">
+          <div class="info-item"><span>Ketua kelompok</span><strong>{leaderEmail}</strong></div>
+          <div class="info-item"><span>Jumlah anggota</span><strong>{group.members?.length || 0} anggota</strong></div>
         </div>
 
-        <!-- Info Grid -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div class="bg-dark-bg border border-brand-primary/30 p-4 rounded-xl">
-            <span class="text-text-secondary text-xs block">Ketua Kelompok</span>
-            <span class="text-text-primary font-semibold text-sm mt-0.5 block truncate">
-              ✉️ {leaderEmail}
-            </span>
-          </div>
-
-          <div class="bg-dark-bg border border-brand-primary/30 p-4 rounded-xl">
-            <span class="text-text-secondary text-xs block">Jumlah Anggota</span>
-            <span class="text-text-primary font-semibold text-sm mt-0.5 block">
-              👥 {group.members?.length || 0} Anggota
-            </span>
-          </div>
-        </div>
-
-        <!-- Alamat / Deskripsi -->
         {#if group.address}
-          <div>
-            <h3 class="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1">Alamat</h3>
-            <p class="text-text-primary text-sm leading-relaxed">{group.address}</p>
-          </div>
+          <section class="text-section">
+            <h2>Alamat</h2>
+            <p>{group.address}</p>
+          </section>
         {/if}
 
-        <div>
-          <h3 class="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1">Deskripsi Kelompok</h3>
-          <p class="text-text-secondary text-sm leading-relaxed whitespace-pre-line">
-            {group.description || 'Belum ada deskripsi yang ditambahkan untuk kelompok tani ini.'}
-          </p>
-        </div>
+        <section class="text-section">
+          <h2>Deskripsi kelompok</h2>
+          <p>{group.description || 'Belum ada deskripsi yang ditambahkan untuk kelompok tani ini.'}</p>
+        </section>
 
-        <!-- DAFTAR ANGGOTA -->
-        <div class="pt-4 border-t border-brand-primary/20 space-y-3">
-          <h3 class="text-sm font-semibold text-text-primary">Daftar Anggota</h3>
-
+        <section class="members-section">
+          <div class="section-heading"><h2>Daftar anggota</h2><span>{group.members?.length || 0} anggota</span></div>
           {#if !group.members || group.members.length === 0}
-            <p class="text-text-secondary text-xs italic">Belum ada anggota di kelompok ini.</p>
+            <p class="status-text">Belum ada anggota di kelompok ini.</p>
           {:else}
-            <div class="max-h-60 overflow-y-auto border border-brand-primary/30 rounded-xl p-3 bg-dark-bg/60 space-y-2 pr-1 custom-scrollbar">
+            <div class="member-list">
               {#each group.members as member (member.id)}
-                <div class="bg-dark-surface border border-brand-primary/20 p-3 rounded-lg flex items-center justify-between gap-3">
-                  
-                  <div class="flex items-center gap-3 min-w-0">
-                    <!-- Tombol mengeluarkan HANYA MUNCUL jika isLeader = true DAN anggota yang ditunjuk BUKAN ketua -->
+                <div class="member-row">
+                  <div class="member-info">
+                    <p class="member-email">{member.email}</p>
+                    <span class="member-role">{member.role?.replace('_', ' ') || 'member'}</span>
+                  </div>
+                  <div class="member-actions">
                     {#if isLeader && Number(member.id) !== Number(group.group_leader_id)}
-                      <button
-                        onclick={() => handleRemoveMember(member.id)}
-                        disabled={actionLoadingId === member.id}
-                        class="bg-status-danger/20 hover:bg-status-danger/40 border border-status-danger/40 text-status-danger text-[11px] font-semibold px-2.5 py-1 rounded-md transition shrink-0 disabled:opacity-50"
-                      >
+                      <button type="button" class="remove-button" onclick={() => handleRemoveMember(member.id)} disabled={actionLoadingId === member.id}>
                         {actionLoadingId === member.id ? '...' : 'Keluarkan'}
                       </button>
                     {/if}
-
-                    <div class="truncate">
-                      <p class="text-xs font-medium text-text-primary truncate">{member.email}</p>
-                      <span class="text-[10px] text-text-secondary capitalize">{member.role?.replace('_', ' ') || 'member'}</span>
-                    </div>
+                    {#if Number(member.id) === Number(group.group_leader_id)}<span class="leader-badge">Ketua</span>{/if}
                   </div>
-
-                  {#if Number(member.id) === Number(group.group_leader_id)}
-                    <span class="bg-brand-secondary/20 text-brand-secondary text-[10px] px-2 py-0.5 rounded font-semibold border border-brand-secondary/30 shrink-0">
-                      Ketua
-                    </span>
-                  {/if}
                 </div>
               {/each}
             </div>
           {/if}
-        </div>
+        </section>
 
-        <!-- SECTION LAHAN KELOMPOK TANI -->
-        <div class="farmland-section">
-          <h3>🌾 Lahan Kelompok Tani</h3>
-
+        <section class="farmland-section">
+          <div class="section-heading"><h2>Lahan kelompok tani</h2><span>{groupFarmlands.length} lahan</span></div>
           {#if isLoadingFarmlands}
             <p class="status-text">Memuat daftar lahan...</p>
           {:else if groupFarmlands.length === 0}
@@ -427,22 +360,20 @@
           {:else}
             <div class="farmland-grid">
               {#each groupFarmlands as item (item.id)}
-                <div class="farmland-card">
-                  <h4>{item.name || 'Lahan Tani'}</h4>
-                  <p><strong>Pemilik:</strong> {item.user?.email || '-'}</p>
-                  <p><strong>Komoditas:</strong> {item.commodity?.name || '-'}</p>
-                  <p><strong>Luas Area:</strong> {item.area_size || '-'} m²</p>
-                </div>
+                <article class="farmland-card">
+                  <h3>{item.name || 'Lahan Tani'}</h3>
+                  <p><strong>Pemilik</strong><span>{item.user?.email || '-'}</span></p>
+                  <p><strong>Komoditas</strong><span>{item.commodity?.name || '-'}</span></p>
+                  <p><strong>Luas area</strong><span>{item.area_size || '-'} m²</span></p>
+                </article>
               {/each}
             </div>
           {/if}
-        </div>
-
-      </div>
+        </section>
+      </article>
     {/if}
-
   </div>
-</div>
+</main>
 
 <!-- ================= POPUP / MODAL: DAFTAR MENUNGGU PERSETUJUAN ================= -->
 {#if showPendingModal}
@@ -499,250 +430,82 @@
   </div>
 {/if}
 
-<!-- ================= STYLES (CSS MURNI) ================= -->
 <style>
-  /* Tombol Keluar Kelompok Tani pada Header */
-  .btn-leave-top {
-    background-color: rgba(211, 47, 47, 0.2);
-    color: #ef5350;
-    border: 1px solid #d32f2f;
-    padding: 8px 16px;
-    font-size: 12px;
-    font-weight: 600;
-    border-radius: 12px;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-  }
-
-  .btn-leave-top:hover {
-    background-color: rgba(211, 47, 47, 0.4);
-  }
-
-  .btn-leave-top:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  /* Section Lahan Kelompok Tani */
-  .farmland-section {
-    margin-top: 24px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    padding-top: 20px;
-  }
-
-  .farmland-section h3 {
-    font-size: 14px;
-    font-weight: 600;
-    margin-bottom: 14px;
-    color: #ffffff;
-  }
-
-  .farmland-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 12px;
-  }
-
-  .farmland-card {
-    background-color: #121212;
-    border: 1px solid #2a2a2a;
-    border-radius: 8px;
-    padding: 12px 14px;
-  }
-
-  .farmland-card h4 {
-    margin: 0 0 6px 0;
-    font-size: 14px;
-    color: #4caf50;
-  }
-
-  .farmland-card p {
-    margin: 4px 0;
-    font-size: 12px;
-    color: #cccccc;
-  }
-
-  .status-text {
-    font-size: 13px;
-    color: #888888;
-    font-style: italic;
-  }
-
-  /* Overlay Hitam Memblokir Seluruh Layar */
-  .modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background-color: rgba(0, 0, 0, 0.75);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 9999;
-    padding: 16px;
-    box-sizing: border-box;
-  }
-
-  /* Kotak Pop-up Modal */
-  .modal-card {
-    background-color: #1e1e1e;
-    color: #ffffff;
-    border: 1px solid #333333;
-    border-radius: 12px;
-    width: 100%;
-    max-width: 480px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px 20px;
-    border-bottom: 1px solid #333333;
-  }
-
-  .modal-header h3 {
-    margin: 0;
-    font-size: 16px;
-    font-weight: 600;
-  }
-
-  .close-btn {
-    background: none;
-    border: none;
-    color: #aaaaaa;
-    font-size: 18px;
-    cursor: pointer;
-    padding: 0 4px;
-  }
-
-  .close-btn:hover {
-    color: #ffffff;
-  }
-
-  .modal-body {
-    padding: 20px;
-    max-height: 350px;
-    overflow-y: auto;
-  }
-
-  .loading-state,
-  .empty-state {
-    text-align: center;
-    color: #aaaaaa;
-    font-size: 13px;
-    padding: 20px 0;
-  }
-
-  .pending-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .pending-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background-color: #121212;
-    border: 1px solid #2a2a2a;
-    padding: 12px 14px;
-    border-radius: 8px;
-    gap: 12px;
-  }
-
-  .member-info {
-    display: flex;
-    flex-direction: column;
-    text-align: left;
-    overflow: hidden;
-  }
-
-  .member-email {
-    margin: 0;
-    font-size: 13px;
-    font-weight: 500;
-    color: #ffffff;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .member-id {
-    font-size: 11px;
-    color: #888888;
-    margin-top: 2px;
-  }
-
-  .action-buttons {
-    display: flex;
-    gap: 8px;
-    flex-shrink: 0;
-  }
-
-  .btn-approve {
-    background-color: #2e7d32;
-    color: #ffffff;
-    border: none;
-    padding: 6px 12px;
-    font-size: 12px;
-    font-weight: 600;
-    border-radius: 6px;
-    cursor: pointer;
-  }
-
-  .btn-approve:hover {
-    background-color: #1b5e20;
-  }
-
-  .btn-reject {
-    background-color: rgba(211, 47, 47, 0.2);
-    color: #ef5350;
-    border: 1px solid #d32f2f;
-    padding: 6px 12px;
-    font-size: 12px;
-    font-weight: 600;
-    border-radius: 6px;
-    cursor: pointer;
-  }
-
-  .btn-reject:hover {
-    background-color: rgba(211, 47, 47, 0.4);
-  }
-
-  .btn-approve:disabled,
-  .btn-reject:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .modal-footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    padding: 12px 20px;
-    border-top: 1px solid #333333;
-    background-color: #1a1a1a;
-  }
-
-  .btn-close {
-    background-color: #2a2a2a;
-    color: #ffffff;
-    border: 1px solid #444444;
-    padding: 8px 16px;
-    font-size: 12px;
-    border-radius: 8px;
-    cursor: pointer;
-  }
-
-  .btn-close:hover {
-    background-color: #333333;
-  }
-
+  .page-shell { min-height: 100vh; box-sizing: border-box; background: #f4f7f1; color: #183126; padding: 36px 20px 68px; }
+  .page-container { width: min(100%, 1000px); margin: 0 auto; }
+  .back-link { display: inline-block; margin-bottom: 24px; color: #39754b; font-size: 13px; font-weight: 700; text-decoration: none; }
+  .back-link:hover { text-decoration: underline; }
+  .detail-card, .state { border: 1px solid #d6e1d5; border-radius: 10px; background: #fff; box-shadow: 0 8px 22px #23472e0f; }
+  .detail-card { display: grid; gap: 24px; padding: 28px; }
+  .detail-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid #e8eee6; padding-bottom: 22px; }
+  .group-identity { min-width: 0; }
+  .eyebrow { margin: 0 0 8px; color: #4e805a; font-size: 11px; font-weight: 800; letter-spacing: .14em; }
+  .title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+  h1 { margin: 0; color: #183126; font: 600 clamp(30px, 4vw, 42px)/1.08 'Fraunces', Georgia, serif; overflow-wrap: anywhere; }
+  .group-code { margin: 9px 0 0; color: #4e805a; font-size: 12px; }
+  .header-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+  .primary-button, .secondary-button, .warning-button, .danger-button, .remove-button, .btn-approve, .btn-reject, .btn-close { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; border: 1px solid transparent; border-radius: 7px; padding: 8px 12px; font: inherit; font-size: 12px; font-weight: 700; line-height: 1.25; text-decoration: none; cursor: pointer; transition: background-color .18s, border-color .18s, opacity .18s; }
+  .primary-button { border-color: #39754b; background: #39754b; color: #fff; }
+  .primary-button:hover:not(:disabled) { border-color: #2d603c; background: #2d603c; }
+  .secondary-button { border-color: #39754b; background: #fff; color: #39754b; }
+  .secondary-button:hover { background: #f4faf2; }
+  .warning-button, .pending-badge { border-color: #e6d4a9; background: #fff8e7; color: #946b26; }
+  .danger-button, .remove-button { border-color: #edc9c6; background: #fff0ef; color: #a44242; }
+  .danger-button:hover:not(:disabled), .remove-button:hover:not(:disabled), .btn-reject:hover:not(:disabled) { background: #ffe4e1; }
+  button:disabled { cursor: not-allowed; opacity: .6; }
+  button:focus-visible, .secondary-button:focus-visible { outline: 3px solid #5c95684d; outline-offset: 2px; }
+  .leader-badge, .pending-badge { display: inline-flex; align-items: center; flex: 0 0 auto; border: 1px solid #d6e8d5; border-radius: 999px; background: #eaf4e9; color: #39754b; padding: 5px 9px; font-size: 11px; font-weight: 700; }
+  .pending-badge { border-color: #e6d4a9; background: #fff8e7; color: #946b26; }
+  .info-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .info-item { display: grid; gap: 6px; min-width: 0; border: 1px solid #d6e1d5; border-radius: 8px; background: #f9fbf8; padding: 14px; }
+  .info-item span, .section-heading > span { color: #718077; font-size: 12px; }
+  .info-item strong { overflow: hidden; color: #274a32; font-size: 13px; text-overflow: ellipsis; }
+  .text-section { display: grid; gap: 7px; }
+  .text-section h2, .section-heading h2 { margin: 0; color: #183126; font-size: 17px; }
+  .text-section p { margin: 0; color: #718077; font-size: 13px; line-height: 1.65; white-space: pre-line; }
+  .members-section, .farmland-section { border-top: 1px solid #e8eee6; padding-top: 20px; }
+  .section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 13px; }
+  .member-list { display: grid; max-height: 300px; gap: 8px; overflow-y: auto; padding-right: 3px; }
+  .member-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid #e1e9df; border-radius: 8px; background: #fbfdfb; padding: 11px 13px; }
+  .member-info { display: grid; min-width: 0; gap: 4px; }
+  .member-email { margin: 0; overflow: hidden; color: #274a32; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+  .member-role { color: #718077; font-size: 11px; text-transform: capitalize; }
+  .member-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+  .remove-button { min-height: 30px; padding: 5px 9px; font-size: 11px; }
+  .status-text { margin: 0; color: #718077; font-size: 13px; }
+  .farmland-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 11px; }
+  .farmland-card { border: 1px solid #d6e1d5; border-radius: 8px; background: #f9fbf8; padding: 14px; }
+  .farmland-card h3 { margin: 0 0 12px; color: #274a32; font-size: 15px; overflow-wrap: anywhere; }
+  .farmland-card p { display: flex; justify-content: space-between; gap: 10px; margin: 7px 0 0; color: #718077; font-size: 11px; }
+  .farmland-card p strong { color: #385540; font-weight: 700; }
+  .farmland-card p span { text-align: right; overflow-wrap: anywhere; }
+  .state { padding: 30px; }
+  .loading-card { display: grid; gap: 14px; min-height: 150px; }
+  .loading-card span { height: 14px; border-radius: 4px; background: #e8eee6; animation: pulse 1.3s ease-in-out infinite alternate; }
+  .loading-card span:first-child { width: 55%; height: 23px; }.loading-card span:last-child { width: 80%; }
+  .error-state { display: grid; justify-items: center; gap: 14px; text-align: center; }
+  .error-state p { margin: 0; color: #a44242; font-size: 14px; }
+  .modal-overlay { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; box-sizing: border-box; background: #18312680; backdrop-filter: blur(3px); padding: 16px; }
+  .modal-card { display: flex; width: min(100%, 480px); max-height: min(600px, 90vh); flex-direction: column; overflow: hidden; border: 1px solid #d6e1d5; border-radius: 10px; background: #fff; color: #183126; box-shadow: 0 18px 50px #18312630; }
+  .modal-header, .modal-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 18px; }
+  .modal-header { border-bottom: 1px solid #e8eee6; }
+  .modal-header h3 { margin: 0; color: #183126; font-size: 16px; }
+  .close-btn { border: 0; background: transparent; color: #718077; padding: 3px 7px; font-size: 18px; cursor: pointer; }
+  .close-btn:hover { color: #183126; }
+  .modal-body { overflow-y: auto; padding: 16px 18px; }
+  .loading-state, .empty-state { padding: 22px 0; color: #718077; font-size: 13px; text-align: center; }
+  .pending-list { display: grid; gap: 8px; }
+  .pending-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid #e1e9df; border-radius: 8px; background: #fbfdfb; padding: 11px; }
+  .member-id { color: #718077; font-size: 11px; }
+  .action-buttons { display: flex; flex: 0 0 auto; gap: 7px; }
+  .btn-approve { border-color: #39754b; background: #39754b; color: #fff; }
+  .btn-approve:hover:not(:disabled) { background: #2d603c; }
+  .btn-reject { border-color: #edc9c6; background: #fff0ef; color: #a44242; }
+  .modal-footer { justify-content: flex-end; border-top: 1px solid #e8eee6; background: #f9fbf8; }
+  .btn-close { border-color: #d6e1d5; background: #fff; color: #385540; }
+  .btn-close:hover { background: #f4f7f1; }
+  @keyframes pulse { to { opacity: .55; } }
+  @media (max-width: 700px) { .detail-heading { align-items: flex-start; flex-direction: column; }.header-actions { justify-content: flex-start; }.detail-heading > button, .header-actions > button { width: 100%; }.info-grid { grid-template-columns: 1fr; } }
+  @media (max-width: 560px) { .page-shell { padding: 28px 14px 54px; }.detail-card { gap: 20px; padding: 20px 16px; }.state { padding: 22px 16px; }.title-row { align-items: flex-start; flex-direction: column; gap: 8px; }.member-row, .pending-item { align-items: flex-start; }.member-actions { flex-direction: column-reverse; align-items: flex-end; }.farmland-card p { align-items: flex-start; flex-direction: column; gap: 3px; }.farmland-card p span { text-align: left; }.action-buttons { flex-direction: column; } }
+  @media (prefers-reduced-motion: reduce) { .loading-card span { animation: none; } }
 </style>

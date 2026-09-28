@@ -91,7 +91,7 @@
 
 <main class="auth-shell">
 	<section class="auth-panel">
-		<a class="brand" href="/">🌱 <span>Tani Siaga</span></a>
+		<a class="brand" href="/"><img src="/tani-siaga-logo.svg" alt="" /><span>Tani Siaga</span></a>
 		<p class="kicker">PEMULIHAN AKUN</p>
 		<h1>{isDone ? 'Password diperbarui.' : 'Atur ulang password.'}</h1>
 		<p class="intro">{isDone ? 'Silakan masuk kembali menggunakan password baru.' : 'Kami akan mengirim kode verifikasi ke email akunmu.'}</p>
@@ -150,4 +150,6 @@
 	.leaf { margin-bottom: 18px; font-size: 44px; }
 	@media (max-width: 700px) { .auth-shell { display: block; }.auth-panel { padding: 40px 0 48px; }.auth-aside { display: none; } }
 	@media (max-height: 760px) { .kicker { margin-top: 24px; }.intro { margin: 10px 0 16px; }form { gap: 11px; }.auth-aside { padding: 32px; } }
+	.brand { flex-direction: column; gap: 3px; font-size: 11px; line-height: 1.1; }
+	.brand img { width: 42px; height: 42px; object-fit: contain; }
 </style>

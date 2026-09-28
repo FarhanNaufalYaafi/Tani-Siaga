@@ -22,6 +22,7 @@ export class OrderService {
   private snap: any;
   private coreApi: any;
   private readonly isProduction: boolean;
+  private readonly frontendUrl: string;
 
   constructor(
     private readonly dataSource: DataSource,
@@ -33,6 +34,7 @@ export class OrderService {
     private readonly notificationService: NotificationService,
   ) {
     this.isProduction = this.configService.get<string>('MIDTRANS_IS_PRODUCTION', 'false') === 'true';
+    this.frontendUrl = (this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173').replace(/\/+$/, '');
     const serverKey = this.configService.get<string>('MIDTRANS_SERVER_KEY')!;
     const clientKey = this.configService.get<string>('MIDTRANS_CLIENT_KEY')!;
 
@@ -313,6 +315,9 @@ export class OrderService {
         expiry: {
           unit: 'day',
           duration: 1, // Expiry time 24 jam
+        },
+        callbacks: {
+          finish: `${this.frontendUrl}/pesanan/${saveOrder.id}`,
         },
       };
 
@@ -801,6 +806,7 @@ export class OrderService {
       customer_details: { first_name: bookedOrder.recipientName, phone: bookedOrder.recipientPhoneNumber, address: bookedOrder.recipientAddress },
       shipping_address: { first_name: bookedOrder.recipientName, phone: bookedOrder.recipientPhoneNumber, address: bookedOrder.recipientAddress },
       expiry: { unit: 'day', duration: 1 },
+      callbacks: { finish: `${this.frontendUrl}/pesanan/${order.id}` },
     });
     if (transaction) order.snap_redirect_url = transaction.redirect_url;
     await this.orderRepo.save(order);

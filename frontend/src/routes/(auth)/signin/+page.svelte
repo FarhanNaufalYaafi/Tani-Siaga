@@ -29,7 +29,7 @@
 
 <main class="auth-shell">
   <section class="auth-panel">
-    <a class="brand" href="/">🌱 <span>Tani Siaga</span></a>
+    <a class="brand" href="/"><img src="/tani-siaga-logo.svg" alt="" /><span>Tani Siaga</span></a>
     <p class="kicker">EKOSISTEM PERTANIAN</p>
     <h1>Selamat datang kembali.</h1>
     <p class="intro">Masuk untuk melihat lahan, kelompok tani, dan informasi pertanianmu.</p>
@@ -76,4 +76,6 @@
     .provider-note { margin-top: 4px; font-size: 10px; }
     .switch { margin-top: 9px; }
   }
+  .brand { flex-direction: column; gap: 3px; font-size: 11px; line-height: 1.1; }
+  .brand img { width: 42px; height: 42px; object-fit: contain; }
 </style>

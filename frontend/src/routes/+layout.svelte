@@ -3,7 +3,6 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { browser } from '$app/environment';
-	import favicon from '$lib/assets/favicon.svg';
 	import Modal from '$lib/components/Modal.svelte';
 	import '../app.css';
 	import { getCurrentUser, type CurrentUserDto } from '$lib/api/auth-api';
@@ -239,7 +238,7 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" href={favicon} />
+	<link rel="icon" href="/tani-siaga-logo.svg" />
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 </svelte:head>
 
@@ -248,7 +247,7 @@
 	<header class="app-header" class:hidden={headerHidden} class:fading={headerFading} use:horizontalWheelScroll>
 		<div class="header-inner">
 			<a class="brand" href="/dashboard" aria-label="Tani Siaga Dashboard">
-				<span class="brand-mark">✦</span>
+				<img class="brand-mark" src="/tani-siaga-logo.svg" alt="" />
 				<span class="brand-text">Tani Siaga</span>
 			</a>
 			<button class="nav-toggle" type="button" aria-label={mobileNavOpen ? 'Tutup navigasi' : 'Buka navigasi'} aria-expanded={mobileNavOpen} aria-controls="primary-navigation" onclick={() => (mobileNavOpen = !mobileNavOpen)}>
@@ -322,7 +321,7 @@
 	<footer class="app-footer">
 		<div class="footer-inner">
 			<div class="footer-brand-col">
-				<a class="footer-brand" href="/dashboard">Tani Siaga</a>
+				<a class="footer-brand" href="/dashboard"><img src="/tani-siaga-logo.svg" alt="" />Tani Siaga</a>
 				<p>Teknologi yang tumbuh bersama petani.</p>
 			</div>
 			<div class="footer-links">
@@ -386,25 +385,24 @@
 
 	.brand {
 		display: flex;
+		flex-direction: column;
 		align-items: center;
-		gap: 10px;
+		justify-content: center;
+		gap: 2px;
 		flex: 0 0 auto;
 		color: #fff;
-		font: 700 22px 'DM Sans', sans-serif;
+		font: 700 10px 'DM Sans', sans-serif;
+		line-height: 1.1;
 		text-decoration: none;
 		white-space: nowrap;
 	}
 	.brand-mark {
-		display: grid;
-		place-items: center;
-		width: 33px;
-		height: 33px;
-		border-radius: 50%;
-		background: #6eaa78;
-		color: #f8d68b;
-		font-size: 18px;
+		display: block;
+		width: 42px;
+		height: 42px;
+		object-fit: contain;
 	}
-	.brand-text { letter-spacing: 0.01em; }
+	.brand-text { letter-spacing: 0; }
 	.nav-toggle { display: none; width: 40px; height: 40px; place-items: center; flex: 0 0 auto; border: 1px solid #526b5a; border-radius: 7px; background: transparent; color: #fff; font-size: 21px; line-height: 1; cursor: pointer; }
 
 	.main-nav {
@@ -609,10 +607,15 @@
 		align-items: start;
 	}
 	.footer-brand {
+		display: inline-flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 4px;
 		color: #fff;
-		font: 700 22px 'DM Sans', sans-serif;
+		font: 700 12px 'DM Sans', sans-serif;
 		text-decoration: none;
 	}
+	.footer-brand img { width: 48px; height: 48px; object-fit: contain; }
 	.footer-brand-col p {
 		margin: 10px 0 0;
 		color: #82948a;
@@ -652,7 +655,6 @@
 	}
 	@media (max-width: 520px) {
 		.header-inner { min-height: 68px; padding: 0 14px; gap: 8px; }
-		.brand-text { display: none; }
 		.header-actions { gap: 6px; }
 		.toggle-label, .profile-link > span:last-child { display: none; }
 		.header-spacer { height: 68px; }

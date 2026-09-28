@@ -76,10 +76,10 @@ export async function syncPushToken() {
 	}
 
 	if (!foregroundListenerReady) {
-		onMessage(messaging, (payload) => {
+			onMessage(messaging, (payload) => {
 			const title = payload.notification?.title || 'Tani Siaga';
 			const body = payload.notification?.body || 'Ada pembaruan baru untuk Anda.';
-			if (Notification.permission === 'granted') new Notification(title, { body });
+			if (Notification.permission === 'granted') new Notification(title, { body, icon: '/tani-siaga-logo.svg' });
 		});
 		foregroundListenerReady = true;
 	}

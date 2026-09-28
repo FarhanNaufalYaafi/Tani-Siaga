@@ -16,6 +16,7 @@ messaging.onBackgroundMessage((payload) => {
   const title = payload.notification?.title || 'Tani Siaga';
   const options = {
     body: payload.notification?.body || 'Ada pembaruan baru untuk Anda.',
+    icon: '/tani-siaga-logo.svg',
     data: payload.data || {}
   };
 
