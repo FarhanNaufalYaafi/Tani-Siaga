@@ -61,16 +61,12 @@
 		if (snoozedUntil <= Date.now()) notificationPromptOpen = true;
 	}
 
-	async function loadCurrentUser() {
+	async function loadCurrentUser(pathname = $page.url.pathname) {
 		try {
 			currentUser = await getCurrentUser();
-			if (isAuthRoute) {
+			if (['/signin', '/signup', '/forgot-password'].includes(pathname) && $page.url.pathname === pathname) {
 				if (!authRedirectStarted) {
 					authRedirectStarted = true;
-					await showAlert('Anda masih login. Sign out terlebih dahulu sebelum masuk atau mendaftar dengan akun lain.', {
-						title: 'Sesi masih aktif',
-						tone: 'warning',
-					});
 					await goto('/dashboard', { replaceState: true });
 				}
 				return;
@@ -151,9 +147,10 @@
 
 	$effect(() => {
 		const unsubscribe = page.subscribe(async () => {
+			const pathname = $page.url.pathname;
 			void tick();
 			if (browser) window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
-			await loadCurrentUser();
+			await loadCurrentUser(pathname);
 		});
 		return unsubscribe;
 	});
@@ -193,7 +190,6 @@
 	}
 
 	onMount(() => {
-		void loadCurrentUser();
 		lastScrollY = window.scrollY;
 		window.addEventListener('scroll', onScroll, { passive: true });
 		window.addEventListener('notifications-updated', refreshUnreadNotificationCount);
