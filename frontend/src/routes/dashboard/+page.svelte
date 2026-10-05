@@ -1,11 +1,14 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { getCurrentUser, type CurrentUserDto } from '$lib/api/auth-api';
-	import { getProducts, type Product } from '$lib/api/product-api';
+	import { getCurrentUser } from '$lib/api/auth-api';
+	import type { CurrentUserDto } from '$lib/api/auth-api';
+	import { getProducts } from '$lib/api/product-api';
+	import type { Product } from '$lib/api/product-api';
 
 	let currentUser = $state<CurrentUserDto | null>(null);
 	let preOrderProducts = $state<Product[]>([]);
 	let readyProducts = $state<Product[]>([]);
+	let isRainySeason = $state(false);
 
 	function revealOnScroll(node: HTMLElement) {
 		if (typeof IntersectionObserver === 'undefined') {
@@ -41,7 +44,7 @@
 
 <svelte:head><title>Dashboard | Tani Siaga</title></svelte:head>
 
-<div class="dashboard-main">
+<div class="dashboard-main" class:season-rainy={isRainySeason} class:season-dry={!isRainySeason}>
 	<section class="hero">
 		<div class="hero-copy">
 			<p class="eyebrow">DATA PERTANIAN UNTUK MASA DEPAN PANGAN</p>
@@ -53,15 +56,16 @@
 				<a class="secondary-action" href="/market-analysis">Lihat analisis pasar</a>
 			</div>
 		</div>
-		<div class="hero-art" aria-label="Ilustrasi lahan pertanian">
+		<button class="hero-art" type="button" aria-pressed={isRainySeason} aria-label={`Change ${isRainySeason ? 'kemarau' : 'hujan'}`} onclick={() => isRainySeason = !isRainySeason}>
+			<div class="season-background" aria-hidden="true"></div>
 			<div class="sun"></div>
 			<div class="field field-back"></div>
 			<div class="field field-mid"></div>
 			<div class="field field-front"></div>
-			<span class="art-label label-weather">Cuaca lokal<br /><strong>lebih siap</strong></span>
+			<span class="art-label label-weather">Musim {isRainySeason ? 'Hujan' : 'Kemarau'}<br /><strong>Klik untuk ganti</strong></span>
 			<span class="art-label label-market">Pasar<br /><strong>lebih dekat</strong></span>
-			<span class="plant">🌾</span>
-		</div>
+			
+		</button>
 	</section>
 
 	<section class="data-flow" aria-labelledby="data-flow-title" use:revealOnScroll>
@@ -122,7 +126,7 @@
 {/snippet}
 
 <style>
-	.dashboard-main { flex: 1; color: #183126; }
+	.dashboard-main { flex: 1; color: #183126; transition: background-color .5s ease, color .5s ease; }
 	:global(.reveal-ready) { opacity: 0; transform: translateY(22px); transition: opacity .65s ease, transform .65s cubic-bezier(.2,.7,.2,1); }
 	:global(.reveal-ready.reveal-visible) { opacity: 1; transform: translateY(0); }
 
@@ -176,14 +180,48 @@
 	}
 	.primary-action span { margin-left: 4px; color: #f7d88f; }
 	.secondary-action { color: #39754b; font-size: 13px; font-weight: 700; text-decoration: none; }
-	.hero-art { position: relative; aspect-ratio: 1.25; }
+	.hero-art {
+		position: relative;
+		z-index: 0;
+		display: block;
+		width: 100%;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		color: inherit;
+		text-align: left;
+		aspect-ratio: 1.25;
+		overflow: hidden;
+		border-radius: 8px;
+		cursor: pointer;
+		transition: transform .35s cubic-bezier(.2,.7,.2,1), filter .35s ease;
+	}
+	.hero-art:focus-visible { outline: 3px solid #bd8035; outline-offset: 6px; }
+	.season-background {
+		position: absolute;
+		z-index: 0;
+		inset: 0;
+		background-color: #e8c18c;
+		background-image: linear-gradient(180deg, #f7d88f45, #b75d264d), url('https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1400&q=80');
+		background-position: center;
+		background-size: cover;
+		transition: filter .5s ease, opacity .5s ease;
+	}
+	.sun, .field { z-index: 1; }
+	.art-label, .plant { z-index: 2; }
+	@media (hover: hover) and (pointer: fine) {
+		.hero-art:hover { z-index: 2; transform: scale(1.045); filter: drop-shadow(0 18px 24px #18312624); }
+		.hero-art:hover .field-back { transform: scale(1.05); }
+		.hero-art:hover .field-mid { transform: scale(1.1); }
+		.hero-art:hover .field-front { transform: scale(1.15); }
+	}
 	.sun {
 		position: absolute; top: 14%; right: 17%;
 		width: 26%; height: 26%; border-radius: 50%;
 		background: linear-gradient(180deg, #f7d88f 0%, #f1b44c 100%);
 		box-shadow: 0 0 40px #f7d88f;
 	}
-	.field { position: absolute; left: 0; right: 0; }
+	.field { position: absolute; left: 0; right: 0; transform-origin: center bottom; transition: transform .5s cubic-bezier(.2,.7,.2,1); }
 	.field-back { bottom: 0; height: 65%; background: #9dc7a5; border-top-left-radius: 56% 100%; border-top-right-radius: 56% 100%; }
 	.field-mid { bottom: 0; height: 52%; background: #7cb787; border-top-left-radius: 62% 100%; border-top-right-radius: 62% 100%; }
 	.field-front { bottom: 0; height: 36%; background: #469560; border-top-left-radius: 70% 100%; border-top-right-radius: 70% 100%; }
@@ -333,4 +371,63 @@
 	}
 	@keyframes hero-enter { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
 	@media (prefers-reduced-motion: reduce) { :global(.reveal-ready), .hero-copy { transition: none; animation: none; transform: none; } }
+
+	.season-dry { background: #fff9ef; }
+	.season-dry .eyebrow, .season-dry .hero h1 em, .season-dry .secondary-action,
+	.season-dry .section-title > a, .season-dry .label-weather strong, .season-dry .mini-copy strong { color: #b75d26; }
+	.season-dry .primary-action { background: #b75d26; box-shadow: 0 8px 18px #b75d2626; }
+	.season-dry .resilience-strip { background: #f7e8d3; border-color: #e9c79f; }
+	.season-dry .resilience-links a { color: #914a22; border-color: #dfbd96; }
+	.season-dry .commerce-banner { background: #603a24; }
+	.season-dry .commerce-actions a { border-color: #98704e; color: #ffd18a; }
+	.season-dry .rail-empty { border-color: #e6c5a0; background: #fff5e8; }
+	.season-dry .mini-product { border-color: #ead9c6; background: #fffdfa; }
+	.season-dry .mini-image { background: #f3e3ce; }
+	.season-dry .mini-image b { background: #603a24; }
+
+	.season-rainy { background: #182329; color: #e3ece8; }
+	.season-rainy .eyebrow, .season-rainy .hero h1 em, .season-rainy .secondary-action,
+	.season-rainy .section-title > a, .season-rainy .label-weather strong, .season-rainy .mini-copy strong { color: #9bc9a5; }
+	.season-rainy .hero h1, .season-rainy .flow-heading h2, .season-rainy .resilience-strip h2,
+	.season-rainy .section-title > div h2, .season-rainy .flow-steps h3, .season-rainy .rail-heading h3,
+	.season-rainy .mini-copy h4 { color: #edf3ef; }
+	.season-rainy .hero-text, .season-rainy .flow-heading > p:last-child,
+	.season-rainy .flow-steps article > p:last-child, .season-rainy .step-source,
+	.season-rainy .rail-heading span, .season-rainy .mini-copy span { color: #aabbb3; }
+	.season-rainy .source-chips span { border-color: #465950; background: #26362f; color: #c4d6c8; }
+	.season-rainy .primary-action { background: #4f9864; box-shadow: 0 8px 18px #0004; }
+	.season-rainy .flow-steps { border-color: #43554d; }
+	.season-rainy .flow-steps article + article { border-color: #43554d; }
+	.season-rainy .resilience-strip { background: #263831; border-color: #43594b; }
+	.season-rainy .resilience-strip > div > p:last-child { color: #b8c9bd; }
+	.season-rainy .resilience-links a { border-color: #52695a; color: #b5d8b9; }
+	.season-rainy .commerce-banner { background: #10191e; }
+	.season-rainy .commerce-banner > div > p:last-child { color: #b8c7c0; }
+	.season-rainy .commerce-actions a { border-color: #465b50; color: #f1c779; }
+	.season-rainy .rail-empty { border-color: #52665a; background: #22312a; color: #b8c9bd; }
+	.season-rainy .mini-product { border-color: #43554d; background: #24332d; }
+	.season-rainy .mini-image { background: #34483a; }
+	.season-rainy .mini-image b { background: #17231d; }
+	.season-rainy .hero-art { background: linear-gradient(155deg, #354b56 0%, #263b43 48%, #18282d 100%); }
+	.season-rainy .season-background {
+		background-color: #263b43;
+		background-image: linear-gradient(180deg, #15262b99, #10191ecc), url('https://images.unsplash.com/photo-1511497584788-876760111969?auto=format&fit=crop&w=1400&q=80');
+		filter: saturate(.65);
+	}
+	.season-rainy .hero-art::after {
+		position: absolute;
+		z-index: 1;
+		inset: 0;
+		background: repeating-linear-gradient(108deg, transparent 0 23px, #d2e9ed25 24px 25px, transparent 26px 42px);
+		content: '';
+		pointer-events: none;
+	}
+	.season-rainy .sun { background: #a8bdc2; box-shadow: 0 0 40px #a8bdc255; }
+	.season-rainy .field-back { background: #54746b; }
+	.season-rainy .field-mid { background: #3e6254; }
+	.season-rainy .field-front { background: #294c3b; }
+	.season-rainy .art-label, .season-rainy .plant { z-index: 2; }
+	.season-rainy .art-label { background: #e7eeebed; }
+	.season-rainy .label-market strong { color: #9b672f; }
+	@media (prefers-reduced-motion: reduce) { .dashboard-main, .hero-art, .field { transition: none; } }
 </style>

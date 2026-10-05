@@ -4,6 +4,7 @@
   import { API_BASE_URL } from '$lib/api/api-url';
   import { isStrongPassword, PASSWORD_REQUIREMENTS } from '$lib/services/password-validation';
   import { goto } from '$app/navigation';
+  import signupAsideImage from '$lib/assets/signin-aside.jpg';
 
   let email = $state('');
   let password = $state('');
@@ -75,6 +76,7 @@
 <svelte:head><title>Daftar Akun | Tani Siaga</title></svelte:head>
 
 <main class="auth-shell">
+  <a class="back-home" href="/dashboard" aria-label="Kembali ke menu awal" title="Kembali ke menu awal"><span aria-hidden="true">←</span></a>
   <section class="auth-panel">
     <a class="brand" href="/"><img src="/tani-siaga-logo.svg" alt="" /><span>Tani Siaga</span></a>
     <p class="kicker">MULAI BERTUMBUH</p>
@@ -100,7 +102,10 @@
     <p class="provider-note">{codeSent ? 'Kode ini hanya berlaku untuk email dan verifikasi signup ini.' : 'Password minimal 8 karakter dengan kombinasi kuat.'}</p>
     <p class="switch">Sudah punya akun? <a href="/signin">Masuk di sini</a></p>
   </section>
-  <aside class="auth-aside"><span class="leaf">🌱</span><p>Mulai dari satu lahan, lalu tumbuhkan ekosistemmu.</p></aside>
+  <aside class="auth-aside">
+    <img class="auth-aside-image" src={signupAsideImage} alt="" />
+    <p>Mulai dari satu lahan, lalu tumbuhkan ekosistemmu.</p>
+  </aside>
 </main>
 
 <style>
@@ -135,4 +140,66 @@
   }
   .brand { flex-direction: column; gap: 3px; font-size: 11px; line-height: 1.1; }
   .brand img { width: 42px; height: 42px; object-fit: contain; }
+  .auth-aside { position: relative; overflow: hidden; }
+  .auth-aside-image {
+    position: absolute;
+    z-index: 0;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
+  }
+  .auth-aside::after {
+    position: absolute;
+    z-index: 1;
+    inset: 0;
+    background: linear-gradient(180deg, #10251b20 0%, #10251b05 38%, #10251b99 100%);
+    content: '';
+    pointer-events: none;
+  }
+  .auth-aside p {
+    position: relative;
+    z-index: 2;
+    max-width: 250px;
+    margin: 0;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    color: #fff;
+    text-align: center;
+    text-shadow: 0 2px 12px #10251b;
+  }
+  @media (max-width: 700px) {
+    .auth-shell { position: relative; display: block; padding: 24px 0; }
+    .auth-panel {
+      position: relative;
+      z-index: 1;
+      width: min(430px, calc(100% - 32px));
+      padding: 30px 22px;
+      border-radius: 8px;
+      background: #f4f7f1ed;
+      backdrop-filter: blur(8px);
+    }
+    .auth-aside { position: absolute; z-index: 0; inset: 0; display: block; padding: 0; }
+    .auth-aside p { display: none; }
+  }
+  .back-home {
+    position: absolute;
+    z-index: 5;
+    top: 24px;
+    left: 24px;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+    background: #183126;
+    color: #fff;
+    font: 700 22px/1 Arial, sans-serif;
+    text-decoration: none;
+  }
+  .auth-shell { position: relative; }
+  .back-home:hover { background: #285f3d; }
+  .back-home:focus-visible { outline: 2px solid #39754b; outline-offset: 4px; }
 </style>

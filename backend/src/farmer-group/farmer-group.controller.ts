@@ -41,7 +41,7 @@ export class FarmerGroupController {
     return await this.farmerGroupService.getPendingMembers(leaderId);
   } 
 
-   @Post('/add-members')
+  @Post('/add-members')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtGuard)
   async addMember(
