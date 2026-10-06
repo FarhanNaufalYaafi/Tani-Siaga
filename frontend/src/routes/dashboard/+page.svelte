@@ -4,6 +4,8 @@
 	import type { CurrentUserDto } from '$lib/api/auth-api';
 	import { getProducts } from '$lib/api/product-api';
 	import type { Product } from '$lib/api/product-api';
+	import commercePreviewImage from '$lib/assets/commerce.preview.jpg';
+	import marketBackgroundImage from '$lib/assets/blurry.dashb.jpg';
 
 	let currentUser = $state<CurrentUserDto | null>(null);
 	let preOrderProducts = $state<Product[]>([]);
@@ -82,12 +84,13 @@
 		<div class="resilience-links"><a href="/lahan-tani">Kelola lahan <span>↗</span></a><a href="/kelompok-tani">Temukan kelompok tani <span>↗</span></a></div>
 	</section>
 
-	<section class="commerce-banner" use:revealOnScroll>
-		<div><p class="eyebrow">PANEN TERHUBUNG KE PASAR</p><h2>Rencanakan panen. Temukan pembelinya.</h2><p>Jelajahi produk siap kirim atau dukung hasil tani melalui sistem pre-order.</p></div>
+	<section class="commerce-banner" aria-labelledby="commerce-title" use:revealOnScroll>
+		<div class="commerce-copy"><p class="eyebrow">PANEN TERHUBUNG KE PASAR</p><h2 id="commerce-title">Rencanakan panen. Temukan pembelinya.</h2><p>Jelajahi produk siap kirim atau dukung hasil tani melalui sistem pre-order.</p></div>
+		<img class="commerce-image" src={commercePreviewImage} alt="Hasil panen lokal untuk pasar Tani Siaga" />
 		<div class="commerce-actions"><a href="/e-commerce">Jelajahi e-commerce <span>↗</span></a><a href="/pre-order">Lihat pre-order <span>↗</span></a></div>
 	</section>
 
-	<section class="market-section" use:revealOnScroll>
+	<section class="market-section" style={`--market-background: url("${marketBackgroundImage}")`} use:revealOnScroll>
 		<div class="section-title">
 			<div>
 				<p class="eyebrow">PASAR TANI SIAGA</p>
@@ -95,16 +98,25 @@
 			</div>
 			<a href="/e-commerce">Lihat semua produk ↗</a>
 		</div>
-		{@render ProductRail('Pre-order hasil panen', preOrderProducts, 'Belum ada hasil panen yang dibuka untuk pre-order.')}
-		{@render ProductRail('Produk panen siap kirim', readyProducts, 'Belum ada produk panen siap kirim.')}
+		{@render ProductRail('Pre-order hasil panen', preOrderProducts, 'Belum ada hasil panen yang dibuka untuk pre-order.', 'cart')}
+		{@render ProductRail('Produk panen siap kirim', readyProducts, 'Belum ada produk panen siap kirim.', 'produce')}
 	</section>
 </div>
 
-{#snippet ProductRail(title: string, products: Product[], empty: string)}
+{#snippet ProductRail(title: string, products: Product[], empty: string, emptyIcon: 'cart' | 'produce')}
 	<div class="rail-block" use:revealOnScroll>
 		<div class="rail-heading"><h3>{title}</h3><span>{products.length} produk pilihan</span></div>
 		{#if products.length === 0}
-			<p class="rail-empty">{empty}</p>
+			<div class="rail-empty">
+				<span class="empty-icon" aria-hidden="true">
+					{#if emptyIcon === 'cart'}
+						<svg viewBox="0 0 32 32" fill="none"><path d="M4 6h3l3.1 15.1a2 2 0 0 0 2 1.6h12.1a2 2 0 0 0 1.9-1.4L29 11H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="13" cy="27" r="1.7" fill="currentColor"/><circle cx="24" cy="27" r="1.7" fill="currentColor"/></svg>
+					{:else}
+						<svg viewBox="0 0 32 32" fill="none"><path d="M16 27V15m0 5c-6 0-9-3-9-8 6 0 9 3 9 8Zm0-5c0-5 2.5-8 7-9 1 6-1 9-7 9Zm0 12c-3-3-4-6-4-9m4 9c3-3 4-6 4-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+					{/if}
+				</span>
+				<p>{empty}</p>
+			</div>
 		{:else}
 			<div class="product-rail">
 				{#each products as product (product.id)}
@@ -267,11 +279,15 @@
 	.resilience-strip > div > p:last-child, .commerce-banner > div > p:last-child { max-width: 630px; margin: 12px 0 0; color: #5c7462; font-size: 14px; line-height: 1.65; }
 	.resilience-links, .commerce-actions { display: grid; min-width: 210px; }
 	.resilience-links a, .commerce-actions a { display: flex; justify-content: space-between; gap: 20px; border-top: 1px solid #b5ceb4; padding: 13px 0; color: #275f3a; font-size: 13px; font-weight: 700; text-decoration: none; }
-	.commerce-banner { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 35px; max-width: 1180px; margin: 0 auto 90px; padding: 34px 38px; background: #183126; color: #fff; }
+	.commerce-banner { display: grid; grid-template-columns: minmax(0, 1fr) 220px minmax(210px, auto); align-items: center; gap: 35px; max-width: 1180px; margin: 0 auto 90px; padding: 34px 38px; background: #183126; color: #fff; }
 	.commerce-banner h2 { max-width: 700px; color: #fff; font-size: 34px; }
 	.commerce-banner > div > p:last-child { color: #c3d3c0; }
 	.commerce-actions a { border-color: #58715e; color: #f7d88f; }
-	.market-section { max-width: 1180px; margin: 0 auto 90px; padding: 0 38px; }
+	.commerce-image { display: block; width: 100%; aspect-ratio: 5 / 3; object-fit: cover; }
+	.market-section { position: relative; isolation: isolate; width: 100%; margin: 0 auto 90px; padding: 0 clamp(20px, 4.8vw, 78px) 40px; box-sizing: border-box; }
+	.market-section::before, .market-section::after { position: absolute; inset: -90px 0 0; border-radius: 12px; content: ''; pointer-events: none; }
+	.market-section::before { z-index: -2; background: var(--market-background) center / cover no-repeat; filter: blur(7px); transform: scale(1.015); }
+	.market-section::after { z-index: -1; background: #fff9ef38; }
 	.section-title {
 		display: flex;
 		justify-content: space-between;
@@ -293,13 +309,23 @@
 	.rail-heading h3 { margin: 0; color: #183126; font: 700 22px 'DM Sans', sans-serif; }
 	.rail-heading span { color: #718077; font-size: 12px; font-weight: 700; }
 	.rail-empty {
-		padding: 28px;
-		text-align: center;
-		color: #718077;
-		border: 1px dashed #b5d2b8;
-		border-radius: 10px;
-		background: #f6fbf4;
+		display: flex;
+		min-height: 108px;
+		box-sizing: border-box;
+		align-items: center;
+		gap: 28px;
+		margin: 0;
+		padding: 18px 34px;
+		border: 1px solid #ffffffb8;
+		border-radius: 14px;
+		background: #ffffffd9;
+		backdrop-filter: blur(8px);
+		color: #526e5d;
 	}
+	.rail-empty p { margin: 0; font-size: 16px; line-height: 1.5; }
+	.empty-icon { display: grid; width: 58px; height: 58px; flex: 0 0 58px; place-items: center; border-radius: 50%; background: #e5e8d8; color: #244434; }
+	.empty-icon svg { width: 30px; height: 30px; }
+	.rail-block:last-child { margin-bottom: 0; }
 
 	.product-rail {
 		display: grid;
@@ -341,15 +367,21 @@
 	@media (max-width: 1000px) {
 		.hero { grid-template-columns: 1fr; padding: 60px 26px 70px; gap: 40px; }
 		.data-flow { padding: 0 26px; margin-bottom: 70px; }
-		.market-section { padding: 0 26px; }
+		.market-section { padding: 0 26px 40px; }
 		.resilience-strip, .commerce-banner { margin-left: 26px; margin-right: 26px; }
+		.commerce-banner { grid-template-columns: minmax(0, 1fr) 180px minmax(180px, auto); gap: 24px; }
 		.product-rail { grid-template-columns: repeat(2, 1fr); }
 	}
 	@media (max-width: 620px) {
 		.hero { padding: 46px 20px 54px; }
 		.hero h1 { font-size: 56px; }
 		.hero-text { margin: 24px 0 27px; font-size: 16px; }
-		.data-flow, .market-section { padding: 0 20px; }
+		.data-flow { padding: 0 20px; }
+		.market-section { padding: 0 20px 40px; }
+		.rail-empty { min-height: 88px; gap: 16px; padding: 14px 18px; }
+		.empty-icon { width: 48px; height: 48px; flex-basis: 48px; }
+		.empty-icon svg { width: 25px; height: 25px; }
+		.rail-empty p { font-size: 14px; }
 		.flow-heading h2, .resilience-strip h2, .commerce-banner h2 { font-size: 32px; }
 		.flow-steps { grid-template-columns: 1fr; }
 		.flow-steps article { min-height: auto; padding: 24px 0; }
@@ -380,7 +412,8 @@
 	.season-dry .resilience-links a { color: #914a22; border-color: #dfbd96; }
 	.season-dry .commerce-banner { background: #603a24; }
 	.season-dry .commerce-actions a { border-color: #98704e; color: #ffd18a; }
-	.season-dry .rail-empty { border-color: #e6c5a0; background: #fff5e8; }
+	.season-dry .market-section::after { background: #fff5e838; }
+	.season-dry .rail-empty { border-color: #ffffffb8; background: #fffdfaD9; }
 	.season-dry .mini-product { border-color: #ead9c6; background: #fffdfa; }
 	.season-dry .mini-image { background: #f3e3ce; }
 	.season-dry .mini-image b { background: #603a24; }
@@ -402,9 +435,11 @@
 	.season-rainy .resilience-strip > div > p:last-child { color: #b8c9bd; }
 	.season-rainy .resilience-links a { border-color: #52695a; color: #b5d8b9; }
 	.season-rainy .commerce-banner { background: #10191e; }
+	.season-rainy .market-section::after { background: #18232938; }
 	.season-rainy .commerce-banner > div > p:last-child { color: #b8c7c0; }
 	.season-rainy .commerce-actions a { border-color: #465b50; color: #f1c779; }
-	.season-rainy .rail-empty { border-color: #52665a; background: #22312a; color: #b8c9bd; }
+	.season-rainy .rail-empty { border-color: #52665a; background: #22312ad9; color: #b8c9bd; }
+	.season-rainy .empty-icon { background: #34483a; color: #c4d6c8; }
 	.season-rainy .mini-product { border-color: #43554d; background: #24332d; }
 	.season-rainy .mini-image { background: #34483a; }
 	.season-rainy .mini-image b { background: #17231d; }
