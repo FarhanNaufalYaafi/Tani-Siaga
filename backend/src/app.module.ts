@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
@@ -26,16 +26,20 @@ import { MediaModule } from './media/media.module';
   imports: [
       ScheduleModule.forRoot(),
     ConfigModule.forRoot({ isGlobal: true }),
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-            host: 'localhost',
-                  port: 5432,
-                        username: 'postgres',
-                              password: '17022010Farhan',
-                                    database: 'tani_siaga',
-                                          autoLoadEntities: true,
-                                                synchronize: true,
-                                                      logging: true
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        type: 'postgres',
+        host: configService.get<string>('DB_HOST', 'localhost'),
+        port: Number(configService.get<string>('DB_PORT', '5432')),
+        username: configService.get<string>('DB_USERNAME', 'postgres'),
+        password: configService.getOrThrow<string>('DB_PASSWORD'),
+        database: configService.get<string>('DB_DATABASE', 'tani_siaga'),
+        autoLoadEntities: true,
+        synchronize: true,
+        logging: true,
+      }),
     }),
     AuthModule,
     PassportModule,

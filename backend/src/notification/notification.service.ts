@@ -9,6 +9,7 @@ import { InAppNotification, NotificationSeverity } from './entities/in-app-notif
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getMessaging } from 'firebase-admin/messaging';
 import * as path from 'path';
+import { existsSync } from 'fs';
 import { BookedOrder } from 'src/mini e-commerce/order/entities/booked-order.entity';
 import { bookedOrderStatus } from 'src/mini e-commerce/order/enum/booked-order-status.enum';
 import { User } from 'src/user/entities/user.entity';
@@ -18,6 +19,7 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 @Injectable()
 export class NotificationService {
   private readonly logger = new Logger(NotificationService.name);
+  private readonly messaging: ReturnType<typeof getMessaging> | null;
 
   constructor(
     @InjectRepository(Farmland)
@@ -28,16 +30,28 @@ export class NotificationService {
     @InjectRepository(BookedOrder) private readonly bookedOrderRepo: Repository<BookedOrder>,
     @InjectRepository(User) private readonly userRepo: Repository<User>,
   ) {
-    if (getApps().length === 0) {
-  initializeApp({
-    credential: cert(
-      path.resolve(process.env.FIREBASE_CREDENTIAL_PATH || 'firebase-service-account.key.json')
-    ),
-  });
-}
+    const firebaseApp = getApps()[0];
+    const credentialPath = path.resolve(
+      process.env.FIREBASE_CREDENTIAL_PATH || 'firebase-service-account.key.json',
+    );
+
+    if (firebaseApp) {
+      this.messaging = getMessaging(firebaseApp);
+    } else if (existsSync(credentialPath)) {
+      const app = initializeApp({ credential: cert(credentialPath) });
+      this.messaging = getMessaging(app);
+    } else {
+      this.messaging = null;
+      this.logger.warn('Firebase Admin belum dikonfigurasi; notifikasi push dinonaktifkan.');
+    }
   }
 
     async sendPushNotificationToUser(userId: number, title: string, body: string, dataPayload?: any) {
+      if (!this.messaging) {
+        this.logger.warn('[FCM] Push notification dilewati karena Firebase Admin belum dikonfigurasi.');
+        return { totalTokens: 0, successCount: 0, failureCount: 0 };
+      }
+
       const tokens = await this.tokenRepo.find({ where: { userId } });
       
       if (!tokens || tokens.length === 0) {
@@ -54,7 +68,7 @@ export class NotificationService {
       };
 
       try {
-        const response = await getMessaging().sendEachForMulticast(message);
+        const response = await this.messaging.sendEachForMulticast(message);
         this.logger.log(`FCM terkirim: ${response.successCount} sukses, ${response.failureCount} gagal.`);
         const invalidTokenIds: number[] = [];
         response.responses.forEach((result, index) => {

@@ -3,7 +3,4 @@ backend/dist/
 frontend/.svelte-kit/
 frontend/build/
 **/.env
-**/.env.*
-!**/.env.example
-!**/.env.test
 backend/firebase-service-account.key.json
