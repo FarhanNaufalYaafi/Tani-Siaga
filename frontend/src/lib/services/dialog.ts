@@ -3,6 +3,16 @@ import { writable } from 'svelte/store';
 export type DialogTone = 'info' | 'success' | 'warning' | 'error';
 export type DialogKind = 'alert' | 'confirm' | 'input';
 
+export interface DialogInput {
+	label: string;
+	type?: 'text' | 'number';
+	value?: string;
+	placeholder?: string;
+	min?: number;
+	step?: number;
+	required?: boolean;
+}
+
 export interface DialogOptions {
 	kind: DialogKind;
 	title: string;
@@ -10,18 +20,11 @@ export interface DialogOptions {
 	tone: DialogTone;
 	confirmLabel: string;
 	cancelLabel: string;
-	input?: {
-		label: string;
-		type?: 'text' | 'number';
-		value?: string;
-		placeholder?: string;
-		min?: number;
-		step?: number;
-		required?: boolean;
-	};
+	input?: DialogInput;
+	inputs?: DialogInput[];
 }
 
-type DialogResult = boolean | string | null | undefined;
+type DialogResult = boolean | string | string[] | null | undefined;
 type PendingDialog = {
 	options: DialogOptions;
 	resolve: (result: DialogResult) => void;
@@ -81,7 +84,7 @@ export function showConfirm(
 export function showInput(options: {
 	title: string;
 	message: string;
-	input: NonNullable<DialogOptions['input']>;
+	input: DialogInput;
 	confirmLabel?: string;
 	cancelLabel?: string;
 	tone?: DialogTone;
@@ -96,3 +99,22 @@ export function showInput(options: {
 		input: options.input,
 	}).then((result) => (typeof result === 'string' ? result : null));
 }
+
+	export function showForm(options: {
+		title: string;
+		message: string;
+		inputs: DialogInput[];
+		confirmLabel?: string;
+		cancelLabel?: string;
+		tone?: DialogTone;
+	}): Promise<string[] | null> {
+		return enqueue({
+			kind: 'input',
+			title: options.title,
+			message: options.message,
+			tone: options.tone || 'info',
+			confirmLabel: options.confirmLabel || 'Konfirmasi',
+			cancelLabel: options.cancelLabel || 'Batal',
+			inputs: options.inputs,
+		}).then((result) => (Array.isArray(result) ? result : null));
+	}

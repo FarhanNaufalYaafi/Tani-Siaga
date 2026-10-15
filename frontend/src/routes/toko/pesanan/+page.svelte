@@ -2,12 +2,15 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { getCurrentUser, type CurrentUserDto } from '$lib/api/auth-api';
+	import { getMyShop } from '$lib/api/shop-api';
 	import {
+		cancelDirectContactOrder,
 		confirmOrder,
 		getSellerOrdersManage,
 		type SellerManageOrder,
 		type SellerManageResponse,
 	} from '$lib/api/order-api';
+	import { showConfirm } from '$lib/services/dialog';
 
 	let currentUser = $state<CurrentUserDto | null>(null);
 	let ordersData = $state<SellerManageResponse | null>(null);
@@ -15,12 +18,18 @@
 	let isLoading = $state(true);
 	let errorMessage = $state('');
 	let confirmingId = $state<number | null>(null);
+	let cancellingId = $state<number | null>(null);
 
 	onMount(async () => {
 		try {
 			currentUser = await getCurrentUser();
 		} catch {
 			await goto('/signin');
+			return;
+		}
+		const shopResponse = await getMyShop().catch(() => null);
+		if (shopResponse?.shop?.banned_until && new Date(shopResponse.shop.banned_until).getTime() > Date.now()) {
+			await goto('/toko', { replaceState: true });
 			return;
 		}
 		await loadOrders(activeFilter);
@@ -51,6 +60,23 @@
 		}
 	}
 
+	async function handleCancelDirect(order: SellerManageOrder) {
+		const confirmed = await showConfirm(
+			`Transaksi Hubungi petani untuk order #${order.order_id} akan dibatalkan. Stok ready-stock dari pesanan ini akan dikembalikan.`,
+			{ title: 'Batalkan transaksi?', tone: 'warning', confirmLabel: 'Batalkan transaksi', cancelLabel: 'Kembali' },
+		);
+		if (!confirmed) return;
+		cancellingId = order.order_id;
+		try {
+			await cancelDirectContactOrder(order.order_id);
+			await loadOrders(activeFilter);
+		} catch (error: any) {
+			errorMessage = error.message || 'Gagal membatalkan transaksi.';
+		} finally {
+			cancellingId = null;
+		}
+	}
+
 	function formatPrice(value: number) {
 		return new Intl.NumberFormat('id-ID', {
 			style: 'currency',
@@ -74,15 +100,15 @@
 	function statusClass(status: string) {
 		switch (status) {
 			case 'paid':
-				return 'status-paid';
+				return 'status-dibayar';
 			case 'completed':
-				return 'status-completed';
+				return 'status-selesai';
 			case 'cancel':
-				return 'status-cancel';
+				return 'status-dibatalkan';
 			case 'challenge':
-				return 'status-challenge';
+				return 'status-sengketa';
 			default:
-				return 'status-pending';
+				return 'status-menunggu';
 		}
 	}
 
@@ -95,54 +121,54 @@
 
 <svelte:head><title>Kelola Pesanan Toko | Tani Siaga</title></svelte:head>
 
-<div class="orders-wrap">
-	<div class="orders-main">
-		<a class="back-link" href="/toko">← Kembali ke Dashboard Toko</a>
+<div class="bungkus-pesanan">
+	<div class="utama-pesanan">
+		<a class="tautan-kembali" href="/toko">← Kembali ke Dashboard Toko</a>
 
-		<div class="page-heading">
-			<p class="eyebrow">KELOLA PESANAN TOKO</p>
-			<h1>Pesanan Masuk</h1>
-			<p class="subtitle">Pantau dan konfirmasi pesanan dari pembeli. Klik "Pesanan Selesai" setelah barang diserahkan / transaksi selesai.</p>
+		<div class="judul-halaman">
+			<p class="label-kecil">KELOLA PESANAN TOKO</p>
+			<h1 class="judul">Pesanan Masuk</h1>
+			<p class="subjudul">Pantau dan konfirmasi pesanan dari pembeli. Klik "Pesanan Selesai" setelah barang diserahkan / transaksi selesai.</p>
 		</div>
 
-		<div class="summary-row">
-			<a class:selected={activeFilter === 'all'} class="summary-card all" href="#all" onclick={() => loadOrders('all')}>
-				<span class="num">{ordersData?.counts?.all ?? 0}</span>
-				<span class="lbl">Semua pesanan</span>
+		<div class="baris-ringkasan">
+			<a class:terpilih={activeFilter === 'all'} class="kartu-ringkasan semua" href="#all" onclick={() => loadOrders('all')}>
+				<span class="nomor">{ordersData?.counts?.all ?? 0}</span>
+				<span class="label">Semua pesanan</span>
 			</a>
-			<a class:selected={activeFilter === 'seller_waiting_payment'} class="summary-card waiting-payment" href="#waiting-payment" onclick={() => loadOrders('seller_waiting_payment')}>
-				<span class="num">{ordersData?.counts?.seller_waiting_payment ?? 0}</span>
-				<span class="lbl">Menunggu pembayaran pembeli</span>
+			<a class:terpilih={activeFilter === 'seller_waiting_payment'} class="kartu-ringkasan pembayaran-menunggu" href="#waiting-payment" onclick={() => loadOrders('seller_waiting_payment')}>
+				<span class="nomor">{ordersData?.counts?.seller_waiting_payment ?? 0}</span>
+				<span class="label">Menunggu pembayaran pembeli</span>
 			</a>
-			<a class:selected={activeFilter === 'seller_pending'} class="summary-card pending" href="#pending" onclick={() => loadOrders('seller_pending')}>
-				<span class="num">{ordersData?.counts?.seller_pending ?? 0}</span>
-				<span class="lbl">Perlu konfirmasi toko</span>
+			<a class:terpilih={activeFilter === 'seller_pending'} class="kartu-ringkasan menunggu" href="#pending" onclick={() => loadOrders('seller_pending')}>
+				<span class="nomor">{ordersData?.counts?.seller_pending ?? 0}</span>
+				<span class="label">Perlu konfirmasi toko</span>
 			</a>
-			<a class:selected={activeFilter === 'seller_unconfirmed'} class="summary-card pending" href="#unconfirmed" onclick={() => loadOrders('seller_unconfirmed')}>
-				<span class="num">{ordersData?.counts?.seller_unconfirmed ?? 0}</span>
-				<span class="lbl">Belum dikonfirmasi kedua pihak</span>
+			<a class:terpilih={activeFilter === 'seller_unconfirmed'} class="kartu-ringkasan menunggu" href="#unconfirmed" onclick={() => loadOrders('seller_unconfirmed')}>
+				<span class="nomor">{ordersData?.counts?.seller_unconfirmed ?? 0}</span>
+				<span class="label">Belum dikonfirmasi kedua pihak</span>
 			</a>
-			<a class:selected={activeFilter === 'seller_cancelled'} class="summary-card cancelled" href="#cancelled" onclick={() => loadOrders('seller_cancelled')}>
-				<span class="num">{ordersData?.counts?.seller_cancelled ?? 0}</span>
-				<span class="lbl">Dibatalkan</span>
+			<a class:terpilih={activeFilter === 'seller_cancelled'} class="kartu-ringkasan dibatalkan" href="#cancelled" onclick={() => loadOrders('seller_cancelled')}>
+				<span class="nomor">{ordersData?.counts?.seller_cancelled ?? 0}</span>
+				<span class="label">Dibatalkan</span>
 			</a>
-			<a class:selected={activeFilter === 'seller_completed'} class="summary-card done" href="#completed" onclick={() => loadOrders('seller_completed')}>
-				<span class="num">{ordersData?.counts?.seller_completed ?? 0}</span>
-				<span class="lbl">Selesai dua pihak</span>
+			<a class:terpilih={activeFilter === 'seller_completed'} class="kartu-ringkasan selesai" href="#completed" onclick={() => loadOrders('seller_completed')}>
+				<span class="nomor">{ordersData?.counts?.seller_completed ?? 0}</span>
+				<span class="label">Selesai dua pihak</span>
 			</a>
 		</div>
 
 		{#if errorMessage}
-			<div class="alert error">
+			<div class="peringatan galat">
 				{errorMessage}
 				<button onclick={() => loadOrders(activeFilter)}>Coba lagi</button>
 			</div>
 		{/if}
 
 		{#if isLoading}
-			<div class="state">Memuat pesanan...</div>
+			<div class="keadaan">Memuat pesanan...</div>
 		{:else if !ordersData || ordersData.data.length === 0}
-			<div class="state empty">
+			<div class="keadaan kosong">
 				{activeFilter === 'seller_pending'
 					? 'Tidak ada pesanan yang perlu dikonfirmasi toko saat ini.'
 					: activeFilter === 'seller_waiting_payment'
@@ -156,12 +182,12 @@
 					: 'Belum ada pesanan masuk untuk toko Anda.'}
 			</div>
 		{:else}
-			<div class="orders-list">
+			<div class="daftar-pesanan">
 				{#each ordersData.data as order (order.order_id)}
-					<article class="order-card">
-						<header class="order-head">
+					<article class="kartu-pesanan">
+						<header class="kepala-pesanan">
 							<div>
-								<span class="order-id">ORDER #{order.order_id} · {order.midtrans_order_id}</span>
+								<span class="id-pesanan">ORDER #{order.order_id} · {order.midtrans_order_id}</span>
 								<h2>
 									{order.total_items} item · {formatPrice(order.total_price)}
 								</h2>
@@ -175,16 +201,18 @@
 										: '-'}
 								</small>
 							</div>
-							<div class="status-col">
-								<span class={statusClass(order.status)}>{label(order.status)}</span>
+							<div class="kolom-status">
+								<span class={statusClass(order.status)}>{order.is_preorder_deposit && order.status === 'paid' ? 'DP dibayar' : label(order.status)}</span>
 								{#if order.status === 'pending'}
-									<p class="payment-note">Pesanan akan diproses setelah pembayaran diterima.</p>
+									<p class="catatan-pembayaran">Pesanan akan diproses setelah pembayaran diterima.</p>
+								{:else if order.is_preorder_deposit}
+									<p class="catatan-pembayaran">Menunggu panen dan pelunasan sebelum pesanan dapat diselesaikan.</p>
 								{:else}
-									<div class="confirm-meta">
-										<span class="badge" class:ok={order.buyer_confirmed}>
+									<div class="informasi-konfirmasi">
+										<span class="lencana" class:berhasil={order.buyer_confirmed}>
 											Pembeli: {order.buyer_confirmed ? '✓ Sudah konfirmasi' : 'Belum konfirmasi'}
 										</span>
-										<span class="badge accent" class:ok={order.seller_confirmed}>
+										<span class="lencana aksen" class:berhasil={order.seller_confirmed}>
 											Penjual: {order.seller_confirmed ? '✓ Sudah konfirmasi' : 'Belum konfirmasi'}
 										</span>
 									</div>
@@ -192,50 +220,60 @@
 							</div>
 						</header>
 
-						<section class="order-body">
-							<div class="receiver">
+						<section class="isi-pesanan">
+							<div class="penerima">
 								<h3>Data Penerima</h3>
 								<p><strong>{order.recipient_name}</strong></p>
 								<p>
 									📞 <a href={`tel:${order.recipient_phone}`}>{order.recipient_phone}</a>
-									{#if order.recipient_phone}
+										{#if order.recipient_phone && order.shipping_method === 'DIRECT_CONTACT' && !order.is_preorder_order}
 										· <a class="wa" target="_blank" href={`https://wa.me/${formatWa(order.recipient_phone)}`}>WhatsApp ↗</a>
 									{/if}
 								</p>
-								<p class="address">📍 {order.recipient_address}</p>
-								<p class="ship">
+								<p class="alamat">📍 {order.recipient_address}</p>
+								<p class="kirim">
 									{order.shipping_method === 'PICKUP' ? '📦 Pickup di lokasi toko' : '🤝 Hubungi petani langsung'}
 								</p>
 							</div>
-							<div class="items">
+							<div class="butir">
 								<h3>Daftar Barang</h3>
 								<ul>
 									{#each order.items as item (item.product_id)}
 										<li>
-											<span class="item-name">
+											<span class="nama-butir">
 												{item.product_name}
 																{#if item.is_pre_order}<em>(Pre-order)</em>{/if}
 											</span>
-											<span class="item-qty">{item.quantity} × {formatPrice(item.price)}</span>
+											<span class="jumlah-butir">{item.quantity} × {formatPrice(item.price)}</span>
 										</li>
 									{/each}
 								</ul>
 							</div>
 						</section>
 
-						<footer class="order-foot">
-							<a class="detail-link" href={`/pesanan/${order.order_id}`}>Lihat detail pesanan →</a>
-							<div class="actions">
-								{#if order.status !== 'cancel' && order.status !== 'pending' && !order.seller_confirmed}
+						<footer class="bawah-pesanan">
+							<a class="tautan-rincian" href={`/pesanan/${order.order_id}`}>Lihat detail pesanan →</a>
+							<div class="aksi">
+										{#if order.is_preorder_deposit}
+											<span class="sudah">Menunggu panen dan pelunasan</span>
+										{:else if order.shipping_method === 'DIRECT_CONTACT' && order.status === 'completed' && order.items.length > 0 && order.items.every((item) => !item.is_pre_order)}
+											<button
+												class="tombol-konfirmasi tombol-langsung-batal"
+												disabled={cancellingId === order.order_id}
+												onclick={() => handleCancelDirect(order)}
+											>
+												{cancellingId === order.order_id ? 'Membatalkan...' : 'Batalkan transaksi'}
+											</button>
+										{:else if order.status !== 'cancel' && order.status !== 'pending' && !order.seller_confirmed}
 									<button
-										class="confirm-btn"
+										class="tombol-konfirmasi"
 										disabled={confirmingId === order.order_id}
 										onclick={() => handleConfirm(order.order_id)}
 									>
 										{confirmingId === order.order_id ? 'Menyimpan...' : '✓ Tandai Pesanan Selesai'}
 									</button>
 								{:else if order.seller_confirmed}
-									<span class="already">✓ Anda sudah konfirmasi pesanan ini</span>
+									<span class="sudah">✓ Anda sudah konfirmasi pesanan ini</span>
 								{/if}
 							</div>
 						</footer>
@@ -247,15 +285,16 @@
 </div>
 
 <style>
-	.orders-wrap { flex: 1; color: #183126; }
-
-	.orders-main {
+	.bungkus-pesanan {
+		flex: 1;
+		color: #183126;
+	}
+	.utama-pesanan {
 		max-width: 1060px;
 		margin: auto;
 		padding: 24px 28px 80px;
 	}
-
-	.back-link {
+	.tautan-kembali {
 		display: inline-block;
 		margin-bottom: 24px;
 		color: #39754b;
@@ -263,33 +302,33 @@
 		font-weight: 700;
 		text-decoration: none;
 	}
-
-	.page-heading { margin-bottom: 26px; }
-	.eyebrow {
+	.judul-halaman {
+		margin-bottom: 26px;
+	}
+	.label-kecil {
 		margin: 0 0 10px;
 		color: #4e805a;
 		font-size: 11px;
 		font-weight: 800;
 		letter-spacing: 0.16em;
 	}
-	.page-heading h1 {
+	.judul-halaman h1 {
 		margin: 0;
 		font: 600 clamp(34px, 5vw, 54px)/1 'Fraunces', Georgia, serif;
 	}
-	.subtitle {
+	.subjudul {
 		max-width: 720px;
 		margin: 14px 0 0;
 		color: #718077;
 		line-height: 1.6;
 	}
-
-	.summary-row {
+	.baris-ringkasan {
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);
 		gap: 14px;
 		margin-bottom: 24px;
 	}
-	.summary-card {
+	.kartu-ringkasan {
 		display: grid;
 		place-items: center;
 		align-content: center;
@@ -303,29 +342,52 @@
 		color: inherit;
 		text-align: center;
 	}
-	.summary-card .num {
+	.kartu-ringkasan .nomor {
 		font: 700 38px 'Fraunces', Georgia, serif;
 	}
-	.summary-card .lbl {
+	.kartu-ringkasan .label {
 		color: #5b6e62;
 		font-size: 12px;
 		font-weight: 700;
 	}
-	.summary-card.all { border-color: #d6e1d5; }
-	.summary-card.all .num { color: #183126; }
-	.summary-card.waiting-payment { background: #fff8e8; border-color: #f1dfb1; }
-	.summary-card.waiting-payment .num { color: #98702d; }
-	.summary-card.pending { background: #eef5fa; border-color: #c4d9e8; }
-	.summary-card.pending .num { color: #315f7b; }
-	.summary-card.cancelled { background: #fff0ef; border-color: #e6b8b3; }
-	.summary-card.cancelled .num { color: #a44242; }
-	.summary-card.done { background: #edf8ed; border-color: #b8dbb8; }
-	.summary-card.done .num { color: #2f6a41; }
-	.summary-card.selected {
+	.kartu-ringkasan.semua {
+		border-color: #d6e1d5;
+	}
+	.kartu-ringkasan.semua .nomor {
+		color: #183126;
+	}
+	.kartu-ringkasan.pembayaran-menunggu {
+		background: #fff8e8;
+		border-color: #f1dfb1;
+	}
+	.kartu-ringkasan.pembayaran-menunggu .nomor {
+		color: #98702d;
+	}
+	.kartu-ringkasan.menunggu {
+		background: #eef5fa;
+		border-color: #c4d9e8;
+	}
+	.kartu-ringkasan.menunggu .nomor {
+		color: #315f7b;
+	}
+	.kartu-ringkasan.dibatalkan {
+		background: #fff0ef;
+		border-color: #e6b8b3;
+	}
+	.kartu-ringkasan.dibatalkan .nomor {
+		color: #a44242;
+	}
+	.kartu-ringkasan.selesai {
+		background: #edf8ed;
+		border-color: #b8dbb8;
+	}
+	.kartu-ringkasan.selesai .nomor {
+		color: #2f6a41;
+	}
+	.kartu-ringkasan.terpilih {
 		box-shadow: 0 0 0 3px #39754b inset;
 	}
-
-	.alert {
+	.peringatan {
 		padding: 14px 18px;
 		border-radius: 8px;
 		margin-bottom: 18px;
@@ -336,8 +398,12 @@
 		align-items: center;
 		gap: 16px;
 	}
-	.alert.error { background: #fff0ef; color: #a44242; border: 1px solid #e6b8b3; }
-	.alert button {
+	.peringatan.galat {
+		background: #fff0ef;
+		color: #a44242;
+		border: 1px solid #e6b8b3;
+	}
+	.peringatan button {
 		background: #fff;
 		color: #a44242;
 		border: 1px solid #e6b8b3;
@@ -346,8 +412,7 @@
 		font-weight: 700;
 		cursor: pointer;
 	}
-
-	.state {
+	.keadaan {
 		padding: 60px 40px;
 		text-align: center;
 		border: 1px solid #d6e1d5;
@@ -356,58 +421,81 @@
 		color: #718077;
 		font-size: 15px;
 	}
-	.state.empty { background: #edf8ed; color: #39754b; }
-
-	.orders-list { display: grid; gap: 16px; }
-	.order-card {
+	.keadaan.kosong {
+		background: #edf8ed;
+		color: #39754b;
+	}
+	.daftar-pesanan {
+		display: grid;
+		gap: 16px;
+	}
+	.kartu-pesanan {
 		border: 1px solid #d6e1d5;
 		border-radius: 12px;
 		background: #fff;
 		box-shadow: 0 8px 22px #23472e0a;
 		overflow: hidden;
 	}
-	.order-head {
+	.kepala-pesanan {
 		display: flex;
 		justify-content: space-between;
 		gap: 24px;
 		padding: 20px 24px;
 		border-bottom: 1px solid #eef4ed;
 	}
-	.order-id {
+	.id-pesanan {
 		display: block;
 		color: #718077;
 		font-size: 11px;
 		letter-spacing: 0.08em;
 	}
-	.order-head h2 {
+	.kepala-pesanan h2 {
 		margin: 6px 0 5px;
 		font: 700 20px 'DM Sans', sans-serif;
 	}
-	.order-head small { color: #829087; font-size: 11px; }
-	.status-col {
+	.kepala-pesanan small {
+		color: #829087;
+		font-size: 11px;
+	}
+	.kolom-status {
 		text-align: right;
 		display: grid;
 		gap: 10px;
 		justify-items: end;
 	}
-	.status-col > span:first-child {
+	.kolom-status > span:first-child {
 		display: inline-block;
 		padding: 8px 12px;
 		border-radius: 999px;
 		font-size: 11px;
 		font-weight: 800;
 	}
-	.status-pending { background: #fff8e8; color: #98702d; }
-	.status-paid { background: #fff7de; color: #755b1f; }
-	.status-completed { background: #edf8ed; color: #39754b; }
-	.status-cancel { background: #fff0ef; color: #a44242; }
-	.status-challenge { background: #f0ecff; color: #5a4aa8; }
-	.confirm-meta {
+	.status-menunggu {
+		background: #fff8e8;
+		color: #98702d;
+	}
+	.status-dibayar {
+		background: #fff7de;
+		color: #755b1f;
+	}
+	.status-selesai {
+		background: #edf8ed;
+		color: #39754b;
+	}
+	.status-dibatalkan {
+		background: #fff0ef;
+		color: #a44242;
+	}
+	.status-sengketa {
+		background: #f0ecff;
+		color: #5a4aa8;
+	}
+	.informasi-konfirmasi {
 		display: grid;
 		gap: 5px;
 		justify-items: end;
 	}
-	.badge {
+	.lencana {
 		font-size: 11px;
 		font-weight: 700;
 		padding: 5px 9px;
@@ -415,41 +503,53 @@
 		background: #f0f4ef;
 		color: #65786c;
 	}
-	.badge.ok { background: #edf8ed; color: #2f6a41; }
-	.badge.accent { background: #eef6ee; color: #385540; }
-	.badge.accent.ok { background: #dcebd8; color: #1e4b2d; }
-
-	.order-body {
+	.lencana.berhasil {
+		background: #edf8ed;
+		color: #2f6a41;
+	}
+	.lencana.aksen {
+		background: #eef6ee;
+		color: #385540;
+	}
+	.lencana.aksen.berhasil {
+		background: #dcebd8;
+		color: #1e4b2d;
+	}
+	.isi-pesanan {
 		display: grid;
 		grid-template-columns: 1fr 1.1fr;
 		gap: 26px;
 		padding: 22px 24px;
 	}
-	.order-body h3 {
+	.isi-pesanan h3 {
 		margin: 0 0 12px;
 		color: #385540;
 		font: 700 13px 'DM Sans', sans-serif;
 		letter-spacing: 0.05em;
 		text-transform: uppercase;
 	}
-	.receiver p {
+	.penerima p {
 		margin: 4px 0;
 		color: #183126;
 		font-size: 14px;
 	}
-	.receiver a { color: #39754b; font-weight: 700; text-decoration: none; }
-	.receiver a.wa {
+	.penerima a {
+		color: #39754b;
+		font-weight: 700;
+		text-decoration: none;
+	}
+	.penerima a.wa {
 		background: #25D366;
 		color: #fff !important;
 		padding: 4px 10px;
 		border-radius: 6px;
 		font-size: 12px;
 	}
-	.address {
+	.alamat {
 		color: #5b6e62 !important;
 		line-height: 1.55;
 	}
-	.ship {
+	.kirim {
 		margin-top: 10px !important;
 		padding-top: 10px;
 		border-top: 1px dashed #d6e1d5;
@@ -457,14 +557,14 @@
 		font-weight: 700;
 		font-size: 13px !important;
 	}
-	.items ul {
+	.butir ul {
 		list-style: none;
 		padding: 0;
 		margin: 0;
 		display: grid;
 		gap: 8px;
 	}
-	.items li {
+	.butir li {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
@@ -473,13 +573,15 @@
 		border-radius: 7px;
 		font-size: 13px;
 	}
-	.item-name {
+	.nama-butir {
 		color: #183126;
 		font-weight: 600;
 	}
-	.item-qty { color: #39754b; font-weight: 700; }
-
-	.order-foot {
+	.jumlah-butir {
+		color: #39754b;
+		font-weight: 700;
+	}
+	.bawah-pesanan {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
@@ -488,13 +590,13 @@
 		background: #f8fbf7;
 		border-top: 1px solid #eef4ed;
 	}
-	.detail-link {
+	.tautan-rincian {
 		color: #39754b;
 		font-weight: 700;
 		font-size: 13px;
 		text-decoration: none;
 	}
-	.confirm-btn {
+	.tombol-konfirmasi {
 		padding: 12px 20px;
 		background: #39754b;
 		color: #fff;
@@ -506,8 +608,15 @@
 		cursor: pointer;
 		box-shadow: 0 6px 14px #39754b24;
 	}
-	.confirm-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-	.already {
+	.tombol-konfirmasi:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+	.tombol-langsung-batal {
+		background: #a44242;
+		box-shadow: 0 6px 14px #a4424224;
+	}
+	.sudah {
 		color: #2f6a41;
 		font-weight: 700;
 		font-size: 13px;
@@ -515,14 +624,26 @@
 		background: #dcebd8;
 		border-radius: 7px;
 	}
-
 	@media (max-width: 900px) {
-		.order-head { flex-direction: column; align-items: flex-start; }
-		.status-col { text-align: left; justify-items: start; }
-		.order-body { grid-template-columns: 1fr; }
+		.kepala-pesanan {
+			flex-direction: column;
+			align-items: flex-start;
+		}
+		.kolom-status {
+			text-align: left;
+			justify-items: start;
+		}
+		.isi-pesanan {
+			grid-template-columns: 1fr;
+		}
 	}
 	@media (max-width: 600px) {
-		.summary-row { grid-template-columns: 1fr; }
-		.order-foot { flex-direction: column; align-items: stretch; }
+		.baris-ringkasan {
+			grid-template-columns: 1fr;
+		}
+		.bawah-pesanan {
+			flex-direction: column;
+			align-items: stretch;
+		}
 	}
 </style>

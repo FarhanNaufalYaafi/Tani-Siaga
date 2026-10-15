@@ -210,3 +210,30 @@ export async function leaveFarmerGroup(): Promise<{ message?: string }> {
 
   return await response.json();
 }
+
+export async function getAdminFarmerGroupPage(page = 1, limit = 8, search = ''): Promise<PaginatedResponse<FarmerGroup>> {
+  const response = await authenticatedFetch(`${API_BASE_URL}/farmer-group/admin/groups${paginationQuery(page, limit, search)}`, {
+    method: 'GET', credentials: 'include', headers: { 'Content-Type': 'application/json' }
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(Array.isArray(data.message) ? data.message.join(', ') : data.message || 'Gagal memuat kelompok tani.');
+  return data;
+}
+
+export async function dissolveAdminFarmerGroup(groupId: number, reason: string): Promise<{ message?: string }> {
+  const response = await authenticatedFetch(`${API_BASE_URL}/farmer-group/admin/groups/${groupId}`, {
+    method: 'DELETE', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason })
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(Array.isArray(data.message) ? data.message.join(', ') : data.message || 'Gagal membubarkan kelompok tani.');
+  return data;
+}
+
+export async function removeAdminFarmerGroupMember(userId: number): Promise<{ message?: string }> {
+  const response = await authenticatedFetch(`${API_BASE_URL}/farmer-group/admin/members/${userId}`, {
+    method: 'DELETE', credentials: 'include', headers: { 'Content-Type': 'application/json' }
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(Array.isArray(data.message) ? data.message.join(', ') : data.message || 'Gagal mengeluarkan anggota.');
+  return data;
+}

@@ -282,4 +282,80 @@ export class FarmerGroupService {
         message: 'Anda berhasil keluar dari kelompok tani',
     };
   }
+
+  async getGroupsForAdmin(requestedPage = 1, requestedLimit = 8, search = '') {
+    const { page, limit } = normalizePagination(requestedPage, requestedLimit);
+    const query = this.farmerGroupRepo
+      .createQueryBuilder('group')
+      .leftJoinAndSelect('group.members', 'member')
+      .orderBy('group.id', 'DESC');
+
+    if (search.trim()) {
+      query.andWhere(new Brackets((builder) => {
+        builder.where('group.name ILIKE :search', { search: `%${search.trim()}%` })
+          .orWhere('group.poktan_id ILIKE :search', { search: `%${search.trim()}%` });
+      }));
+    }
+
+    const [data, total] = await query.skip((page - 1) * limit).take(limit).getManyAndCount();
+    return paginatedResult(data, total, page, limit);
+  }
+
+  async deleteGroupByAdmin(groupId: number, reason?: string) {
+    const normalizedReason = reason?.trim();
+    if (!normalizedReason) throw new BadRequestException('Alasan pembubaran wajib diisi.');
+
+    const group = await this.farmerGroupRepo.findOne({
+      where: { id: groupId },
+      relations: { members: true },
+    });
+
+    if (!group) {
+      throw new NotFoundException(`Kelompok tani dengan ID ${groupId} tidak ditemukan.`);
+    }
+
+    for (const member of group.members) {
+      if (member.id) {
+        await this.notificationService.createInAppNotification({
+          userId: member.id,
+          title: 'Kelompok tani dibubarkan admin',
+          message: `Kelompok tani "${group.name}" dibubarkan oleh admin. Alasan: ${normalizedReason}`,
+          type: 'group_update',
+          severity: 'warning',
+          targetUrl: '/kelompok-tani',
+        });
+        await this.userService.removeMemberFromGroup(member.id, group.id);
+      }
+    }
+
+    await this.farmerGroupRepo.delete(group.id);
+
+    return {
+      message: `Kelompok tani "${group.name}" berhasil dibubarkan oleh admin.`,
+      group_id: group.id,
+      reason: normalizedReason,
+    };
+  }
+
+  async removeMemberByAdmin(targetUserId: number) {
+    const user = await this.userService.findOneId(targetUserId);
+
+    if (!user) {
+      throw new NotFoundException(`User dengan ID ${targetUserId} tidak ditemukan.`);
+    }
+
+    if (!user.farmer_group_id) {
+      throw new BadRequestException('User ini bukan anggota kelompok tani.');
+    }
+
+    if (user.role === userRoles.GROUP_LEADER) {
+      throw new BadRequestException('Ketua kelompok tidak dapat dikeluarkan sebagai anggota. Bubarkan kelompok jika diperlukan.');
+    }
+
+    await this.userService.removeMemberFromGroup(targetUserId, user.farmer_group_id);
+
+    return {
+      message: 'Anggota berhasil dikeluarkan dari kelompok tani oleh admin.',
+    };
+  }
 }

@@ -1,0 +1,3007 @@
+openapi: 3.0.3
+info:
+  title: Tani Siaga API
+  version: 1.0.0
+  description: |
+    dokumentasi kontrak API Tani Siaga platform bagi para petani demi menurunkan persentase gagal panen melalui aksi rekomendasi dan analisis cuaca API BMKG
+  contact:
+    name: Tani Siaga
+servers:
+  - url: http://localhost:3000
+    description: Local backend
+tags:
+  - name: Authentication
+  - name: Users
+  - name: Farmer groups
+  - name: Farmlands
+  - name: Commodities
+  - name: Wilayah
+  - name: Media
+  - name: Notifications
+  - name: AI recommendations
+  - name: Shops
+  - name: Products
+  - name: Cart
+  - name: Cart items
+  - name: Orders
+security:
+  - AccessTokenCookie: []
+paths:
+  /auth/signup:
+    post:
+      tags: [Authentication]
+      summary: Register a local account
+      description: Requires no active session. Sends/starts email verification.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignUpLocal'
+      responses:
+        '200':
+          description: Signup result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /auth/verify-email:
+    post:
+      tags: [Authentication]
+      summary: Verify signup email and create a session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailCode'
+      responses:
+        '200':
+          description: Account information; access and refresh cookies are set
+          headers:
+            Set-Cookie:
+              description: Sets `access_token` and `refresh_token` cookies.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionUser'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /auth/forgot-password:
+    post:
+      tags: [Authentication]
+      summary: Request a password-reset code
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPassword'
+      responses:
+        '200':
+          description: Request result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /auth/verify-reset-code:
+    post:
+      tags: [Authentication]
+      summary: Verify a password-reset code
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailCode'
+      responses:
+        '200':
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /auth/reset-password:
+    post:
+      tags: [Authentication]
+      summary: Reset a password using a verified code
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPassword'
+      responses:
+        '200':
+          description: Reset result; clears access and refresh cookies
+          headers:
+            Set-Cookie:
+              description: Clears `access_token` and `refresh_token` cookies.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /auth/profile/password-code:
+    post:
+      tags: [Authentication]
+      summary: Request a password-change verification code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword]
+              properties:
+                currentPassword:
+                  type: string
+      responses:
+        '200':
+          description: Request result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/profile/password:
+    patch:
+      tags: [Authentication]
+      summary: Change the authenticated user's password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeProfilePassword'
+      responses:
+        '200':
+          description: Password-change result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/signin:
+    post:
+      tags: [Authentication]
+      summary: Sign in with email and password
+      description: Sets access and refresh cookies; tokens are not in the response body.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignUpLocal'
+      responses:
+        '200':
+          description: Authenticated account; sets access and refresh cookies
+          headers:
+            Set-Cookie:
+              description: Sets `access_token` and `refresh_token` cookies.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /auth/me:
+    get:
+      tags: [Authentication]
+      summary: Get the authenticated user's profile
+      responses:
+        '200':
+          description: Authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Rotate the session tokens
+      description: Authenticates using the `refresh_token` cookie and sets new cookies.
+      security:
+        - RefreshTokenCookie: []
+      responses:
+        '201':
+          description: Tokens refreshed; rotates access and refresh cookies
+          headers:
+            Set-Cookie:
+              description: Sets new `access_token` and `refresh_token` cookies.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/google:
+    get:
+      tags: [Authentication]
+      summary: Start Google OAuth sign-in
+      description: Redirects to the Google OAuth provider. Requires no active session.
+      security: []
+      responses:
+        '302':
+          description: Redirect to Google OAuth
+  /auth/google/callback:
+    get:
+      tags: [Authentication]
+      summary: Handle Google OAuth callback
+      description: Sets session cookies and redirects to the frontend dashboard.
+      security: []
+      responses:
+        '302':
+          description: Redirect to the frontend dashboard
+          headers:
+            Set-Cookie:
+              description: Sets `access_token` and `refresh_token` cookies.
+              schema:
+                type: string
+  /auth/promote/{id}:
+    patch:
+      tags: [Authentication]
+      summary: Promote a user (admin only)
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '202':
+          description: Promotion result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /auth/signout:
+    post:
+      tags: [Authentication]
+      summary: Sign out and clear session cookies
+      responses:
+        '201':
+          description: Signout result; clears access and refresh cookies
+          headers:
+            Set-Cookie:
+              description: Clears `access_token` and `refresh_token` cookies.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /user/update:
+    patch:
+      tags: [Users]
+      summary: Update the current user's account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUser'
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /farmer-group:
+    get:
+      tags: [Farmer groups]
+      summary: List farmer groups
+      parameters:
+        - $ref: '#/components/parameters/Page8'
+        - $ref: '#/components/parameters/Limit8'
+        - $ref: '#/components/parameters/Search'
+      responses:
+        '200':
+          description: Paginated farmer groups
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+    post:
+      tags: [Farmer groups]
+      summary: Create a farmer group
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFarmerGroup'
+      responses:
+        '200':
+          description: Created group
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /farmer-group/pending:
+    get:
+      tags: [Farmer groups]
+      summary: List pending group applicants
+      responses:
+        '200':
+          description: Pending applicants
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+  /farmer-group/add-members:
+    post:
+      tags: [Farmer groups]
+      summary: Add a member to the current group
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              properties:
+                userId:
+                  type: number
+      responses:
+        '200':
+          description: Operation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+  /farmer-group/leave:
+    post:
+      tags: [Farmer groups]
+      summary: Leave the current farmer group
+      responses:
+        '200':
+          description: Leave result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+  /farmer-group/{id}:
+    get:
+      tags: [Farmer groups]
+      summary: Get a farmer group
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Farmer group
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /farmer-group/{id}/apply:
+    post:
+      tags: [Farmer groups]
+      summary: Apply to join a farmer group
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Application result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /farmer-group/approve/{userId}:
+    post:
+      tags: [Farmer groups]
+      summary: Approve a group applicant
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Approval result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /farmer-group/reject/{userId}:
+    post:
+      tags: [Farmer groups]
+      summary: Reject a group applicant
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Rejection result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /farmer-group/members/{userId}:
+    delete:
+      tags: [Farmer groups]
+      summary: Remove a member from the current group
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Removal result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /farmer-group/admin/groups:
+    get:
+      tags: [Farmer groups]
+      summary: List groups for administration (declared route is shadowed)
+      description: |
+        This route is declared after `GET /farmer-group/{id}`. The earlier
+        parameter route can consume `admin` and fail integer parsing, so this
+        operation may be unreachable at runtime until the route order is fixed.
+      parameters:
+        - $ref: '#/components/parameters/Page8'
+        - $ref: '#/components/parameters/Limit8'
+        - $ref: '#/components/parameters/Search'
+      responses:
+        '200':
+          description: Paginated groups
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /farmer-group/admin/groups/{id}:
+    delete:
+      tags: [Farmer groups]
+      summary: Delete a group as an administrator
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  description: Required by business logic despite being optional in the inline type.
+      responses:
+        '200':
+          description: Deletion result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /farmer-group/admin/members/{userId}:
+    delete:
+      tags: [Farmer groups]
+      summary: Remove a member as an administrator
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Removal result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /farmlands:
+    post:
+      tags: [Farmlands]
+      summary: Create a farmland
+      description: The current controller/guard role metadata effectively denies the listed single roles with 403.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFarmland'
+      responses:
+        '201':
+          description: Created farmland
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /farmlands/my:
+    get:
+      tags: [Farmlands]
+      summary: List the current user's farmlands
+      description: The current role metadata effectively denies the listed single roles with 403.
+      parameters:
+        - $ref: '#/components/parameters/Page8'
+        - $ref: '#/components/parameters/Limit8'
+        - $ref: '#/components/parameters/Search'
+      responses:
+        '200':
+          description: Paginated farmlands
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /farmlands/group/{id}:
+    get:
+      tags: [Farmlands]
+      summary: List a group's farmlands
+      description: The current role metadata effectively denies the listed single roles with 403.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/Page8'
+        - $ref: '#/components/parameters/Limit8'
+        - $ref: '#/components/parameters/Search'
+      responses:
+        '200':
+          description: Paginated farmlands
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /farmlands/{id}:
+    get:
+      tags: [Farmlands]
+      summary: Get a farmland
+      description: The current role metadata effectively denies the listed single roles with 403.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Farmland
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    patch:
+      tags: [Farmlands]
+      summary: Update a farmland
+      description: The current role metadata effectively denies the listed single roles with 403.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateFarmland'
+      responses:
+        '200':
+          description: Updated farmland
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags: [Farmlands]
+      summary: Delete a farmland
+      description: The current role metadata effectively denies the listed single roles with 403.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Deletion result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /farmlands/{id}/replant:
+    post:
+      tags: [Farmlands]
+      summary: Record replanting for a farmland
+      description: The current role metadata effectively denies the listed single roles with 403.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateFarmland'
+      responses:
+        '200':
+          description: Replant result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /farmlands/{id}/weather:
+    get:
+      tags: [Farmlands]
+      summary: Get farmland weather forecasts
+      description: Returns forecasts for the farmland location; inactive farmland can produce 400.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Weather forecast data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  farmland_id:
+                    type: integer
+                  farmland_name:
+                    type: string
+                  adm4_code:
+                    type: string
+                  forecasts:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /commodities:
+    get:
+      tags: [Commodities]
+      summary: List commodities
+      parameters:
+        - $ref: '#/components/parameters/Page8'
+        - $ref: '#/components/parameters/Limit8'
+        - $ref: '#/components/parameters/Search'
+      responses:
+        '200':
+          description: Paginated commodities
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Commodities]
+      summary: Create a commodity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCommodity'
+      responses:
+        '201':
+          description: Created commodity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /commodities/{id}:
+    get:
+      tags: [Commodities]
+      summary: Get a commodity
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Commodity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Commodities]
+      summary: Update a commodity (admin only)
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCommodity'
+      responses:
+        '200':
+          description: Updated commodity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      tags: [Commodities]
+      summary: Delete a commodity (admin only)
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Deletion result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /wilayah/provinces:
+    get:
+      tags: [Wilayah]
+      summary: List provinces
+      security: []
+      responses:
+        '200':
+          description: Province data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+  /wilayah/regencies/{provinceCode}:
+    get:
+      tags: [Wilayah]
+      summary: List regencies in a province
+      security: []
+      parameters:
+        - name: provinceCode
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Regency data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+  /wilayah/districts/{regencyCode}:
+    get:
+      tags: [Wilayah]
+      summary: List districts in a regency
+      security: []
+      parameters:
+        - name: regencyCode
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: District data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+  /wilayah/villages/{districtCode}:
+    get:
+      tags: [Wilayah]
+      summary: List villages in a district
+      security: []
+      parameters:
+        - name: districtCode
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Village data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+  /media/images:
+    post:
+      tags: [Media]
+      summary: Upload an image
+      description: Maximum size 5 MB. Accepts JPG, PNG, and WebP. `moderation` purpose is admin-only.
+      parameters:
+        - name: purpose
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [product, profile, review, moderation]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: JPG, PNG, or WebP image; maximum 5 MB.
+      responses:
+        '201':
+          description: Image uploaded
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url, path]
+                properties:
+                  url:
+                    type: string
+                    format: uri
+                  path:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /notification/device-token:
+    post:
+      tags: [Notifications]
+      summary: Register a device notification token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterDeviceToken'
+      responses:
+        '201':
+          description: Registered token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      tags: [Notifications]
+      summary: Unregister a device notification token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnregisterDeviceToken'
+      responses:
+        '200':
+          description: Unregistration result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /notification:
+    get:
+      tags: [Notifications]
+      summary: List the current user's notifications
+      responses:
+        '200':
+          description: Notifications and unread count
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, unreadCount]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ServiceResult'
+                  unreadCount:
+                    type: integer
+    delete:
+      tags: [Notifications]
+      summary: Delete all notifications for the current user
+      responses:
+        '200':
+          description: Number of deleted notifications
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deletedCount:
+                    type: integer
+  /notification/read-all:
+    patch:
+      tags: [Notifications]
+      summary: Mark all notifications as read
+      responses:
+        '200':
+          description: Number of updated notifications
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updatedCount:
+                    type: integer
+  /notification/{id}:
+    get:
+      tags: [Notifications]
+      summary: Get a notification
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Notification, or null when not found
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ServiceResult'
+                nullable: true
+    delete:
+      tags: [Notifications]
+      summary: Delete a notification
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Delete result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+  /notification/{id}/read:
+    patch:
+      tags: [Notifications]
+      summary: Mark a notification as read
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Notification, or null when not found
+          content:
+            application/json:
+              schema:
+                nullable: true
+                $ref: '#/components/schemas/ServiceResult'
+  /ai-recommendations/market-analysis/my-farmlands:
+    get:
+      tags: [AI recommendations]
+      summary: List market-analysis history for current user's farmlands
+      parameters:
+        - $ref: '#/components/parameters/Page1'
+        - $ref: '#/components/parameters/Limit10'
+      responses:
+        '200':
+          description: Paginated market-analysis history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /ai-recommendations/market-analysis/{id}:
+    get:
+      tags: [AI recommendations]
+      summary: Get market-analysis details
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Market analysis
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /ai-recommendations/recommendations/my-farmlands:
+    get:
+      tags: [AI recommendations]
+      summary: List recommendation history for current user's farmlands
+      parameters:
+        - $ref: '#/components/parameters/Page1'
+        - $ref: '#/components/parameters/Limit10'
+      responses:
+        '200':
+          description: Paginated recommendation history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedRecommendations'
+  /ai-recommendations/recommendations/{id}:
+    get:
+      tags: [AI recommendations]
+      summary: Get recommendation details
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Recommendation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /ai-recommendations/farmlands/{farmlandId}/recommendations:
+    get:
+      tags: [AI recommendations]
+      summary: List recommendations for a farmland
+      parameters:
+        - $ref: '#/components/parameters/FarmlandId'
+        - $ref: '#/components/parameters/Page1'
+        - $ref: '#/components/parameters/Limit10'
+      responses:
+        '200':
+          description: Recommendation history; inactive farmlands may return an empty result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /ai-recommendations/farmlands/{farmlandId}/market-analysis:
+    get:
+      tags: [AI recommendations]
+      summary: List market analyses for a farmland
+      parameters:
+        - $ref: '#/components/parameters/FarmlandId'
+        - $ref: '#/components/parameters/Page1'
+        - $ref: '#/components/parameters/Limit10'
+      responses:
+        '200':
+          description: Market-analysis history; inactive farmlands may return an empty result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /shop:
+    post:
+      tags: [Shops]
+      summary: Create a shop
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateShop'
+      responses:
+        '201':
+          description: Created shop
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /shop/me:
+    get:
+      tags: [Shops]
+      summary: Get the current user's shop
+      responses:
+        '200':
+          description: Shop ownership information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  has_shop:
+                    type: boolean
+                  shop:
+                    allOf:
+                      - $ref: '#/components/schemas/ServiceResult'
+                    nullable: true
+  /shop/me/profile-image:
+    patch:
+      tags: [Shops]
+      summary: Update the current shop profile image
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [profile_image_url]
+              properties:
+                profile_image_url:
+                  type: string
+                  format: uri
+      responses:
+        '200':
+          description: Update result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /shop/me/products:
+    get:
+      tags: [Shops]
+      summary: List the current shop's products
+      responses:
+        '200':
+          description: Shop products
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ServiceResult'
+  /shop/admin/pending:
+    get:
+      tags: [Shops]
+      summary: List pending shop applications (admin only)
+      parameters:
+        - $ref: '#/components/parameters/Page8'
+        - $ref: '#/components/parameters/Limit8'
+        - $ref: '#/components/parameters/Search'
+      responses:
+        '200':
+          description: Pending shops
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /shop/admin:
+    get:
+      tags: [Shops]
+      summary: List shops for administration
+      parameters:
+        - $ref: '#/components/parameters/Page8'
+        - $ref: '#/components/parameters/Limit8'
+        - $ref: '#/components/parameters/Search'
+      responses:
+        '200':
+          description: Paginated shops
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /shop/admin/{id}/approve:
+    patch:
+      tags: [Shops]
+      summary: Approve a shop (admin only)
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Approval result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /shop/admin/{id}/reject:
+    patch:
+      tags: [Shops]
+      summary: Reject a shop (admin only)
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        $ref: '#/components/requestBodies/ReasonOptional'
+      responses:
+        '200':
+          description: Rejection result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /shop/admin/{id}/warn:
+    patch:
+      tags: [Shops]
+      summary: Issue a shop warning (admin only)
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShopWarning'
+      responses:
+        '200':
+          description: Warning result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /shop/admin/{id}/ban:
+    patch:
+      tags: [Shops]
+      summary: Sanction a shop (admin only)
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShopSanction'
+      responses:
+        '200':
+          description: Sanction result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /shop/admin/{id}/lift-sanction:
+    patch:
+      tags: [Shops]
+      summary: Lift a shop sanction (admin only)
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Sanction result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /shop/admin/{id}/reduce-sanction:
+    patch:
+      tags: [Shops]
+      summary: Reduce a shop sanction (admin only)
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                days:
+                  type: number
+      responses:
+        '200':
+          description: Sanction result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /shop/admin/{id}/dashboard:
+    get:
+      tags: [Shops]
+      summary: Get a shop administration dashboard
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/ServiceResult'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /shop/admin/{id}:
+    delete:
+      tags: [Shops]
+      summary: Delete a shop (admin only)
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Deletion result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /shop/{id}:
+    get:
+      tags: [Shops]
+      summary: Get a public shop profile
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Public shop information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /products:
+    get:
+      tags: [Products]
+      summary: List the public product catalog
+      security: []
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [all, pre_order, ready_stock]
+            default: all
+        - $ref: '#/components/parameters/Page8'
+        - $ref: '#/components/parameters/Limit8'
+        - $ref: '#/components/parameters/Search'
+      responses:
+        '200':
+          description: Product catalog
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+    post:
+      tags: [Products]
+      summary: Create a product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProduct'
+      responses:
+        '201':
+          description: Created product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /products/admin/pending:
+    get:
+      tags: [Products]
+      summary: List pending products for moderation (admin only)
+      parameters:
+        - $ref: '#/components/parameters/Page8'
+        - $ref: '#/components/parameters/Limit8'
+        - $ref: '#/components/parameters/Search'
+      responses:
+        '200':
+          description: Pending products
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /products/admin/{id}/approve:
+    patch:
+      tags: [Products]
+      summary: Approve a product (admin only)
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Approval result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /products/admin/{id}/reject:
+    patch:
+      tags: [Products]
+      summary: Reject a product (admin only)
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        $ref: '#/components/requestBodies/ReasonOptional'
+      responses:
+        '200':
+          description: Rejection result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /products/admin/{id}/deactivate:
+    patch:
+      tags: [Products]
+      summary: Deactivate a product (admin only)
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        $ref: '#/components/requestBodies/ReasonOptional'
+      responses:
+        '200':
+          description: Deactivation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /products/admin/{id}/reactivate:
+    patch:
+      tags: [Products]
+      summary: Reactivate a product (admin only)
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Reactivation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /products/admin/{id}:
+    delete:
+      tags: [Products]
+      summary: Delete a product as an administrator
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        $ref: '#/components/requestBodies/ReasonOptional'
+      responses:
+        '200':
+          description: Deletion result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /products/{id}:
+    get:
+      tags: [Products]
+      summary: Get an approved active product
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Product details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Products]
+      summary: Update a product
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProduct'
+      responses:
+        '200':
+          description: Updated product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Products]
+      summary: Delete a product
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Deletion result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /products/{id}/reviews:
+    get:
+      tags: [Products]
+      summary: List reviews for a product
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/Page10'
+        - $ref: '#/components/parameters/Limit10'
+      responses:
+        '200':
+          description: Paginated product reviews
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+    post:
+      tags: [Products]
+      summary: Create a product review
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductReview'
+      responses:
+        '201':
+          description: Review created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /products/{id}/reviews/eligibility:
+    get:
+      tags: [Products]
+      summary: Check review eligibility for a product
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Eligibility result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /products/{id}/reviews/{reviewId}:
+    patch:
+      tags: [Products]
+      summary: Update a product review
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - name: reviewId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProductReview'
+      responses:
+        '200':
+          description: Updated review
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Products]
+      summary: Delete a product review
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - name: reviewId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Deletion result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /products/{id}/complete-harvest:
+    post:
+      tags: [Products]
+      summary: Record harvest completion for a product
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FulfillHarvest'
+      responses:
+        '201':
+          description: Harvest result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /products/farmlands/{farmlandId}/complete-harvest:
+    post:
+      tags: [Products]
+      summary: Record harvest completion for products from a farmland
+      parameters:
+        - $ref: '#/components/parameters/FarmlandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FulfillHarvest'
+      responses:
+        '201':
+          description: Harvest result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /cart:
+    get:
+      tags: [Cart]
+      summary: Get or create the current user's cart
+      responses:
+        '200':
+          description: Cart and cart items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /cart-items/{productId}:
+    post:
+      tags: [Cart items]
+      summary: Add a product to the cart
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CartItemQuantity'
+      responses:
+        '200':
+          description: Cart item added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessData'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /cart-items/{cartItemsId}:
+    patch:
+      tags: [Cart items]
+      summary: Update the quantity of a cart item
+      parameters:
+        - name: cartItemsId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CartItemQuantity'
+      responses:
+        '200':
+          description: Updated cart item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessData'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      tags: [Cart items]
+      summary: Remove an item from the cart
+      parameters:
+        - name: cartItemsId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Removal result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /orders:
+    get:
+      tags: [Orders]
+      summary: List the current user's orders
+      responses:
+        '200':
+          description: Orders
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /order:
+    get:
+      tags: [Orders]
+      summary: Alias for listing the current user's orders
+      responses:
+        '200':
+          description: Orders
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /orders/seller:
+    get:
+      tags: [Orders]
+      summary: List orders for the current seller
+      responses:
+        '200':
+          description: Seller orders
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+  /order/seller:
+    get:
+      tags: [Orders]
+      summary: Alias for listing orders for the current seller
+      responses:
+        '200':
+          description: Seller orders
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+  /orders/booked:
+    get:
+      tags: [Orders]
+      summary: List booked orders
+      responses:
+        '200':
+          description: Booked orders
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+  /order/booked:
+    get:
+      tags: [Orders]
+      summary: Alias for listing booked orders
+      responses:
+        '200':
+          description: Booked orders
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+  /orders/review/{cartItemId}:
+    post:
+      tags: [Orders]
+      summary: Preview checkout for a cart item
+      parameters:
+        - name: cartItemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '201':
+          description: Checkout preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /order/review/{cartItemId}:
+    post:
+      tags: [Orders]
+      summary: Alias for previewing checkout for a cart item
+      parameters:
+        - name: cartItemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '201':
+          description: Checkout preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /orders/review/buy-now/{productId}:
+    post:
+      tags: [Orders]
+      summary: Preview a buy-now checkout
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                quantity:
+                  type: number
+      responses:
+        '201':
+          description: Buy-now preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+  /order/review/buy-now/{productId}:
+    post:
+      tags: [Orders]
+      summary: Alias for previewing a buy-now checkout
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                quantity:
+                  type: number
+      responses:
+        '201':
+          description: Buy-now preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+  /orders/payment/{cartItemId}:
+    post:
+      tags: [Orders]
+      summary: Create a payment for a cart item
+      parameters:
+        - name: cartItemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrder'
+      responses:
+        '201':
+          description: Payment and order result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /order/payment/{cartItemId}:
+    post:
+      tags: [Orders]
+      summary: Alias for creating a payment for a cart item
+      parameters:
+        - name: cartItemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrder'
+      responses:
+        '201':
+          description: Payment and order result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+  /orders/buy-now/{productId}:
+    post:
+      tags: [Orders]
+      summary: Create a buy-now order and payment
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrder'
+      responses:
+        '201':
+          description: Payment and order result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /order/buy-now/{productId}:
+    post:
+      tags: [Orders]
+      summary: Alias for creating a buy-now order and payment
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrder'
+      responses:
+        '201':
+          description: Payment and order result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+  /orders/seller/manage:
+    get:
+      tags: [Orders]
+      summary: List seller orders by status filter
+      parameters:
+        - name: filter
+          in: query
+          schema:
+            type: string
+            enum: [all, seller_waiting_payment, seller_pending, seller_unconfirmed, seller_cancelled, seller_completed]
+      responses:
+        '200':
+          description: Seller order management data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /order/seller/manage:
+    get:
+      tags: [Orders]
+      summary: Alias for seller order management
+      parameters:
+        - name: filter
+          in: query
+          schema:
+            type: string
+            enum: [all, seller_waiting_payment, seller_pending, seller_unconfirmed, seller_cancelled, seller_completed]
+      responses:
+        '200':
+          description: Seller order management data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+  /orders/booked/{id}/cancel:
+    post:
+      tags: [Orders]
+      summary: Cancel a booked order
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '201':
+          description: Cancellation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /order/booked/{id}/cancel:
+    post:
+      tags: [Orders]
+      summary: Alias for cancelling a booked order
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '201':
+          description: Cancellation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+  /orders/booked/{id}/confirm:
+    post:
+      tags: [Orders]
+      summary: Confirm a booked order
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '201':
+          description: Confirmation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+  /order/booked/{id}/confirm:
+    post:
+      tags: [Orders]
+      summary: Alias for confirming a booked order
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '201':
+          description: Confirmation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+  /orders/{id}:
+    get:
+      tags: [Orders]
+      summary: Get an order
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Order details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /order/{id}:
+    get:
+      tags: [Orders]
+      summary: Alias for getting an order
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Order details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+  /orders/{id}/confirm:
+    post:
+      tags: [Orders]
+      summary: Confirm an order
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '201':
+          description: Order confirmation status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  status:
+                    type: string
+                  buyer_confirmed:
+                    type: boolean
+                  seller_confirmed:
+                    type: boolean
+  /order/{id}/confirm:
+    post:
+      tags: [Orders]
+      summary: Alias for confirming an order
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '201':
+          description: Order confirmation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+  /orders/{id}/cancel-direct:
+    post:
+      tags: [Orders]
+      summary: Cancel an order directly
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '201':
+          description: Cancellation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+  /order/{id}/cancel-direct:
+    post:
+      tags: [Orders]
+      summary: Alias for cancelling an order directly
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '201':
+          description: Cancellation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+  /orders/{id}/sync:
+    post:
+      tags: [Orders]
+      summary: Synchronize an order payment
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Synchronization result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+  /order/{id}/sync:
+    post:
+      tags: [Orders]
+      summary: Alias for synchronizing an order payment
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Synchronization result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+  /orders/webhook:
+    post:
+      tags: [Orders]
+      summary: Receive a Midtrans payment notification
+      description: Public webhook. The body is untyped and has no DTO validation in the controller.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Webhook processing result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /order/webhook:
+    post:
+      tags: [Orders]
+      summary: Alias for the Midtrans payment notification webhook
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Webhook processing result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+  /orders/replay-webhook:
+    post:
+      tags: [Orders]
+      summary: Replay a payment notification (authenticated)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Webhook processing result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /order/replay-webhook:
+    post:
+      tags: [Orders]
+      summary: Alias for replaying a payment notification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Webhook processing result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+components:
+  securitySchemes:
+    AccessTokenCookie:
+      type: apiKey
+      in: cookie
+      name: access_token
+      description: HTTP-only access-token cookie set by signin, email verification, or Google OAuth.
+    RefreshTokenCookie:
+      type: apiKey
+      in: cookie
+      name: refresh_token
+      description: HTTP-only refresh-token cookie set by signin, email verification, or Google OAuth.
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: integer
+    FarmlandId:
+      name: farmlandId
+      in: path
+      required: true
+      schema:
+        type: integer
+    Page8:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+    Limit8:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 8
+        minimum: 1
+    Search:
+      name: search
+      in: query
+      schema:
+        type: string
+        default: ''
+    Page1:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+    Page10:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+    Limit10:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 10
+        minimum: 1
+  requestBodies:
+    ReasonOptional:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              reason:
+                type: string
+  responses:
+    BadRequest:
+      description: Invalid input or business-rule failure
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/HttpError'
+    Unauthorized:
+      description: Missing, invalid, or expired session
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/HttpError'
+    Forbidden:
+      description: Authenticated user lacks permission
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/HttpError'
+    NotFound:
+      description: Requested resource was not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/HttpError'
+    Conflict:
+      description: Request conflicts with the current resource or session state
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/HttpError'
+    ServerError:
+      description: Internal or external service failure
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/HttpError'
+  schemas:
+    HttpError:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+        message:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: string
+        error:
+          type: string
+    ServiceResult:
+      description: Service-defined response; exact structure depends on the operation.
+      oneOf:
+        - type: object
+          additionalProperties: true
+        - type: array
+          items:
+            type: object
+            additionalProperties: true
+        - type: string
+    Message:
+      type: object
+      properties:
+        message:
+          type: string
+    SuccessData:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/ServiceResult'
+    SessionUser:
+      type: object
+      required: [id, email, role]
+      properties:
+        id:
+          oneOf:
+            - type: integer
+            - type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+    User:
+      type: object
+      additionalProperties: true
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+    SignUpLocal:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+          description: Must satisfy the application's strong-password validation.
+    EmailCode:
+      type: object
+      required: [email, code]
+      properties:
+        email:
+          type: string
+          format: email
+        code:
+          type: string
+          minLength: 6
+          maxLength: 6
+    ForgotPassword:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+    ResetPassword:
+      type: object
+      required: [email, code, password, confirmPassword]
+      properties:
+        email:
+          type: string
+          format: email
+        code:
+          type: string
+          minLength: 6
+          maxLength: 6
+        password:
+          type: string
+          format: password
+        confirmPassword:
+          type: string
+          format: password
+    ChangeProfilePassword:
+      type: object
+      required: [currentPassword, code, password, confirmPassword]
+      properties:
+        currentPassword:
+          type: string
+          format: password
+        code:
+          type: string
+          minLength: 6
+          maxLength: 6
+        password:
+          type: string
+          format: password
+        confirmPassword:
+          type: string
+          format: password
+    UpdateUser:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+        profile_image_url:
+          type: string
+          maxLength: 2048
+    CreateFarmerGroup:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 150
+        poktan_id:
+          type: string
+          maxLength: 50
+        address:
+          type: string
+    CreateFarmland:
+      type: object
+      required: [name, area_size, adm4_code, plant_method]
+      properties:
+        name:
+          type: string
+        area_size:
+          type: number
+        adm4_code:
+          type: string
+        plant_method:
+          type: string
+        address_detail:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        plant_date:
+          type: string
+          format: date
+        commodity_id:
+          type: number
+        custom_avg_harvest_days:
+          type: number
+          minimum: 1
+        custom_max_humidity_percentage:
+          type: number
+          minimum: 0
+          maximum: 100
+        custom_max_temp_celsius:
+          type: number
+        custom_min_temp_celsius:
+          type: number
+        expected_yield_user_kg:
+          type: number
+    UpdateFarmland:
+      type: object
+      description: All CreateFarmland fields are optional for update and replant operations.
+      properties:
+        name:
+          type: string
+        area_size:
+          type: number
+        adm4_code:
+          type: string
+        plant_method:
+          type: string
+        address_detail:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        plant_date:
+          type: string
+          format: date
+        commodity_id:
+          type: number
+        custom_avg_harvest_days:
+          type: number
+          minimum: 1
+        custom_max_humidity_percentage:
+          type: number
+          minimum: 0
+          maximum: 100
+        custom_max_temp_celsius:
+          type: number
+        custom_min_temp_celsius:
+          type: number
+        expected_yield_user_kg:
+          type: number
+    CreateCommodity:
+      type: object
+      required: [name, avg_harvest_days, max_humidity_percentage, max_temp_celsius, min_temp_celsius]
+      properties:
+        name:
+          type: string
+        variety:
+          type: string
+        avg_harvest_days:
+          type: number
+          minimum: 1
+        max_humidity_percentage:
+          type: number
+          minimum: 0
+          maximum: 100
+        max_temp_celsius:
+          type: number
+        min_temp_celsius:
+          type: number
+    UpdateCommodity:
+      type: object
+      properties:
+        name:
+          type: string
+        variety:
+          type: string
+        avg_harvest_days:
+          type: number
+          minimum: 1
+        max_humidity_percentage:
+          type: number
+          minimum: 0
+          maximum: 100
+        max_temp_celsius:
+          type: number
+        min_temp_celsius:
+          type: number
+    RegisterDeviceToken:
+      type: object
+      required: [fcmToken, deviceType]
+      properties:
+        fcmToken:
+          type: string
+        deviceType:
+          type: string
+          enum: [android, ios, web]
+    UnregisterDeviceToken:
+      type: object
+      required: [fcmToken]
+      properties:
+        fcmToken:
+          type: string
+    CreateShop:
+      type: object
+      required: [name, description, location, phone_number]
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 100
+        description:
+          type: string
+          minLength: 20
+          maxLength: 1500
+        location:
+          type: string
+          minLength: 10
+          maxLength: 500
+        phone_number:
+          type: string
+          description: Valid Indonesian phone number.
+        profile_image_url:
+          type: string
+          maxLength: 2048
+    ShopWarning:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          maxLength: 2000
+        evidence_urls:
+          type: array
+          maxItems: 4
+          items:
+            type: string
+            format: uri
+            maxLength: 2048
+    ShopSanction:
+      allOf:
+        - $ref: '#/components/schemas/ShopWarning'
+        - type: object
+          required: [duration_days]
+          properties:
+            duration_days:
+              type: integer
+              minimum: 1
+              maximum: 365
+    CreateProduct:
+      type: object
+      required: [name, price, description, image_url]
+      properties:
+        name:
+          type: string
+        price:
+          type: number
+        description:
+          type: string
+        image_url:
+          type: array
+          items:
+            type: string
+        stock:
+          type: number
+        is_pre_order:
+          type: boolean
+        farmland_id:
+          type: number
+        po_quota_kg:
+          type: integer
+          minimum: 1
+    UpdateProduct:
+      type: object
+      properties:
+        name:
+          type: string
+        price:
+          type: number
+        description:
+          type: string
+        image_url:
+          type: array
+          items:
+            type: string
+        stock:
+          type: number
+        is_pre_order:
+          type: boolean
+        farmland_id:
+          type: number
+        po_quota_kg:
+          type: integer
+          minimum: 1
+    FulfillHarvest:
+      type: object
+      required: [actual_harvest_yield_kg]
+      properties:
+        actual_harvest_yield_kg:
+          type: number
+          minimum: 0
+    CreateProductReview:
+      type: object
+      required: [orderId, rating]
+      properties:
+        orderId:
+          type: integer
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+          maxLength: 1000
+        image_urls:
+          type: array
+          maxItems: 5
+          items:
+            type: string
+            maxLength: 2048
+    UpdateProductReview:
+      type: object
+      properties:
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+          maxLength: 1000
+        image_urls:
+          type: array
+          maxItems: 5
+          items:
+            type: string
+            maxLength: 2048
+    CartItemQuantity:
+      type: object
+      required: [quantity]
+      properties:
+        quantity:
+          type: integer
+          minimum: 1
+    CreateOrder:
+      type: object
+      required: [recipient_name, recipient_phone_number, recipient_address, shipping_method]
+      properties:
+        recipient_name:
+          type: string
+        recipient_phone_number:
+          type: string
+        recipient_address:
+          type: string
+        shipping_method:
+          type: string
+          enum: [PICKUP, DIRECT_CONTACT]
+        quantity:
+          type: integer
+          minimum: 1
+    PaginatedRecommendations:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceResult'
+        meta:
+          type: object
+          properties:
+            total:
+              type: integer
+            page:
+              type: integer
+            limit:
+              type: integer
+            totalPages:
+              type: integer

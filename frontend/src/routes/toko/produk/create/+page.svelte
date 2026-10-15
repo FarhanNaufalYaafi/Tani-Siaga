@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { getCurrentUser, type CurrentUserDto } from '$lib/api/auth-api';
 	import { createProduct, type CreateProductPayload } from '$lib/api/product-api';
+	import { uploadImages } from '$lib/api/media-api';
 	import { getMyFarmlands, type Farmland } from '$lib/api/farmland-api';
 	import { getMyShop, type ShopResponse } from '$lib/api/shop-api';
 
@@ -18,6 +19,8 @@
 	let errorMessage = $state('');
 	let successMessage = $state('');
 	let loadFarmlandError = $state('');
+	let selectedImages = $state<File[]>([]);
+	let imagePreviewUrl = $state('');
 
 	let isPreOrder = $state(false);
 	let eligibleFarmlands = $derived(farmlands.filter((farmland) => {
@@ -34,7 +37,6 @@
 		price: number | undefined;
 		stock: number | undefined;
 		description: string;
-		image_url_1: string;
 		farmland_id: number | '';
 		po_quota_kg: number | undefined;
 	}>({
@@ -42,7 +44,6 @@
 		price: undefined,
 		stock: undefined,
 		description: '',
-		image_url_1: '',
 		farmland_id: '',
 		po_quota_kg: undefined,
 	});
@@ -61,6 +62,10 @@
 			const shopRes = await getMyShop();
 			hasShop = shopRes.has_shop;
 			shopInfo = shopRes.shop;
+			if (shopRes.shop?.banned_until && new Date(shopRes.shop.banned_until).getTime() > Date.now()) {
+				await goto('/toko', { replaceState: true });
+				return;
+			}
 		} catch {
 			hasShop = false;
 		}
@@ -82,9 +87,23 @@
 		}).format(value);
 	}
 
-	function previewImage(): string {
-		if (form.image_url_1) return form.image_url_1;
-		return '';
+	function handleImageSelection(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		const files = Array.from(input.files || []);
+		if (files.length > 5) {
+			errorMessage = 'Pilih maksimal 5 gambar produk.';
+			input.value = '';
+			return;
+		}
+		if (files.some((file) => file.size > 5 * 1024 * 1024)) {
+			errorMessage = 'Ukuran setiap gambar maksimal 5 MB.';
+			input.value = '';
+			return;
+		}
+		if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+		selectedImages = files;
+		imagePreviewUrl = files.length ? URL.createObjectURL(files[0]) : '';
+		errorMessage = '';
 	}
 
 	function selectedFarmland(): Farmland | undefined {
@@ -115,15 +134,16 @@
 			if (!form.description?.trim() || form.description.length < 10) {
 				throw new Error('Deskripsi produk minimal 10 karakter.');
 			}
-			if (!form.image_url_1?.trim()) {
-				throw new Error('Mohon isi URL gambar utama produk.');
+			if (!selectedImages.length) {
+				throw new Error('Pilih minimal satu gambar produk.');
 			}
 
+			const imageUrls = await uploadImages(selectedImages, 'product');
 			const payload: CreateProductPayload = {
 				name: form.name.trim(),
 				price: Number(form.price),
 				description: form.description.trim(),
-				image_url: [form.image_url_1.trim()],
+				image_url: imageUrls,
 				is_pre_order: isPreOrder,
 			};
 
@@ -142,82 +162,99 @@
 				payload.stock = Number(form.stock);
 			}
 
-			const created = await createProduct(payload);
-			successMessage = 'Produk berhasil dibuat! Mengalihkan ke halaman kelola produk...';
-			setTimeout(() => goto(`/toko/produk/${created.id}`), 1400);
+			await createProduct(payload);
+			successMessage = 'Produk berhasil dikirim dan sedang menunggu persetujuan admin.';
+			await goto('/toko');
 		} catch (err: any) {
 			errorMessage = err.message || 'Gagal membuat produk.';
 		} finally {
 			isSaving = false;
 		}
 	}
+
+	onDestroy(() => {
+		if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+	});
 </script>
 
 <svelte:head><title>Buat Produk Baru | Tani Siaga</title></svelte:head>
 
-<div class="edit-wrap">
-	<div class="edit-main">
-		<a class="back-link" href="/toko">← Kembali ke Dashboard Toko</a>
+<div class="bungkus-ubah">
+	<div class="utama-ubah">
+		<a class="tautan-kembali" href="/toko">← Kembali ke Dashboard Toko</a>
 
 		{#if isLoading}
-			<div class="state">Menyiapkan formulir pembuatan produk...</div>
+			<div class="keadaan">Menyiapkan formulir pembuatan produk...</div>
 		{:else if !isSeller}
-			<section class="no-shop">
-				<div class="no-shop-card">
-					<div class="no-shop-icon">🚫</div>
-					<p class="eyebrow">AKSES DITOLAK</p>
-					<h1>Hanya seller yang dapat membuat produk</h1>
-					<p class="subtitle">Fitur ini hanya tersedia untuk akun dengan peran seller (farmer, individual_farmer, group_leader, admin).</p>
-					<div class="cta-row">
-						<a class="primary-btn" href="/toko">Kembali ke Dashboard Toko</a>
-						<a class="secondary-btn" href="/dashboard">Ke Dashboard Utama</a>
+			<section class="toko-tanpa">
+				<div class="kartu-toko-tanpa">
+					<div class="ikon-toko-tanpa">🚫</div>
+					<p class="label-kecil">AKSES DITOLAK</p>
+					<h1 class="judul">Hanya seller yang dapat membuat produk</h1>
+					<p class="subjudul">Fitur ini hanya tersedia untuk akun dengan peran seller (farmer, individual_farmer, group_leader, admin).</p>
+					<div class="baris-ajakan">
+						<a class="tombol-utama" href="/toko">Kembali ke Dashboard Toko</a>
+						<a class="tombol-pendukung" href="/dashboard">Ke Dashboard Utama</a>
 					</div>
 				</div>
 			</section>
 		{:else if !hasShop}
-			<section class="no-shop">
-				<div class="no-shop-card">
-					<div class="no-shop-icon">🌾</div>
-					<p class="eyebrow">TOKO BELUM TERSEDIA</p>
-					<h1>Anda belum punya toko.</h1>
-					<p class="subtitle">Buat toko terlebih dahulu untuk mulai mendaftarkan produk ke Tani Siaga.</p>
-					<div class="cta-row">
-						<a class="primary-btn" href="/toko/create">Buat Toko Sekarang ↗</a>
-						<a class="secondary-btn" href="/dashboard">Kembali ke Dashboard</a>
+			<section class="toko-tanpa">
+				<div class="kartu-toko-tanpa">
+					<div class="ikon-toko-tanpa">🌾</div>
+					<p class="label-kecil">TOKO BELUM TERSEDIA</p>
+					<h1 class="judul">Anda belum punya toko.</h1>
+					<p class="subjudul-toko-kosong">Buat toko terlebih dahulu untuk mulai mendaftarkan produk ke Tani Siaga.</p>
+					<div class="baris-ajakan">
+						<a class="tombol-utama" href="/toko/create">Buat Toko Sekarang ↗</a>
+						<a class="tombol-pendukung" href="/dashboard">Kembali ke Dashboard</a>
+					</div>
+				</div>
+			</section>
+		{:else if shopInfo && shopInfo.approval_status !== 'approved'}
+			<section class="toko-tanpa">
+				<div class="kartu-toko-tanpa kartu-peringatan">
+					<div class="ikon-toko-tanpa">⏳</div>
+					<p class="label-kecil">MENUNGGU PERSETUJUAN ADMIN</p>
+					<h1 class="judul">Toko Anda belum disetujui.</h1>
+					<p class="subjudul">Produk baru hanya bisa dibuat setelah toko Anda disetujui oleh admin. Silakan tunggu konfirmasi berikutnya.</p>
+					<div class="baris-ajakan">
+						<a class="tombol-utama" href="/toko">Kembali ke Dashboard Toko</a>
+						<a class="tombol-pendukung" href="/dashboard">Dashboard Utama</a>
 					</div>
 				</div>
 			</section>
 		{:else}
-			<div class="grid-layout">
-				<aside class="preview-card">
-					<div class="preview-image">
-						{#if previewImage()}
-							<img src={previewImage()} alt={form.name || 'Preview gambar produk'} />
+			<div class="tata-kisi">
+				<aside class="kartu-pratinjau">
+					<div class="gambar-pratinjau">
+						{#if imagePreviewUrl}
+							<img src={imagePreviewUrl} alt={form.name || 'Preview gambar produk'} />
 						{:else}
-							<span class="ph">🌾</span>
+							<span class="petunjuk">🌾</span>
 						{/if}
-						<span class:po={isPreOrder} class="tag">
+						<span class:pra-pesan={isPreOrder} class="label">
 							{isPreOrder ? 'PRE-ORDER' : 'SIAP KIRIM'}
 						</span>
 					</div>
-					<div class="preview-body">
-						<p class="eyebrow">PREVIEW PRODUK</p>
-						<h1>{form.name?.trim() || 'Nama produk kamu'}</h1>
-						<p class="shop-link">Toko: {shopInfo?.name || currentUser?.email || 'Toko Saya'}</p>
-						<strong class="price-big">
+					<div class="isi-pratinjau">
+						<p class="label-kecil">PREVIEW PRODUK</p>
+						<h1 class="judul">{form.name?.trim() || 'Nama produk kamu'}</h1>
+						<p class="tautan-toko">Toko: {shopInfo?.name || currentUser?.email || 'Toko Saya'}</p>
+						<strong class="besar-harga">
 							{form.price && Number(form.price) > 0 ? formatPrice(Number(form.price)) : 'Rp 0'}
 						</strong>
-						<div class="stock-info">
+						<div class="informasi-stok">
 							{#if isPreOrder}
-								<div class="po-info">
+								<div class="informasi-pra-pesan">
 									<span>Lahan dipilih</span>
 									<strong>{selectedFarmland()?.name || 'Belum pilih lahan'}</strong>
 								</div>
-								<div class="po-info ok">
+								<div class="informasi-pra-pesan berhasil">
 									<span>Kuota PO (saran AI)</span>
 									<strong>{estimatedYield() || 0} Kg</strong>
 								</div>
-								<div class="po-info">
+								<div class="informasi-pra-pesan">
 									<span>Kuota PO (final)</span>
 									<strong>
 										{form.po_quota_kg && !Number.isNaN(Number(form.po_quota_kg))
@@ -226,7 +263,7 @@
 									</strong>
 								</div>
 							{:else}
-								<div class="stock-info-inline">
+								<div class="sebaris-informasi-stok">
 									<span>Stok tersedia</span>
 									<strong>
 										{form.stock !== undefined && !Number.isNaN(Number(form.stock))
@@ -236,55 +273,55 @@
 								</div>
 							{/if}
 						</div>
-						<p class="description-preview">
+						<p class="pratinjau-deskripsi">
 							{form.description?.trim() || 'Deskripsi produk akan tampil di sini. Jelaskan secara singkat tentang produk, manfaat, dan keunggulannya dibanding produk sejenis.'}
 						</p>
 					</div>
 				</aside>
 
-				<section class="form-section">
-					<div class="page-heading">
-						<p class="eyebrow">BUAT PRODUK BARU</p>
-						<h1>Daftarkan Produk ke Toko</h1>
-						<p class="subtitle">
+				<section class="bagian-formulir">
+					<div class="judul-halaman">
+						<p class="label-kecil">BUAT PRODUK BARU</p>
+						<h1 class="judul">Daftarkan Produk ke Toko</h1>
+						<p class="subjudul">
 							Pilih tipe penjualan: <strong>Ready Stock</strong> (misal: pestisida, peralatan, barang siap jual)
 							atau <strong>Pre-Order</strong> (hasil panen dari lahan tertentu yang masih dalam masa tanam).
 						</p>
 					</div>
 
-					{#if errorMessage}<div class="alert error">{errorMessage}</div>{/if}
-					{#if successMessage}<div class="alert success">{successMessage}</div>{/if}
+					{#if errorMessage}<div class="peringatan galat">{errorMessage}</div>{/if}
+					{#if successMessage}<div class="peringatan berhasil">{successMessage}</div>{/if}
 
-					<form class="form-card" onsubmit={handleCreate}>
-						<div class="type-switcher" role="group" aria-label="Tipe produk">
+					<form class="kartu-formulir" onsubmit={handleCreate}>
+						<div class="pengalih-jenis" role="group" aria-label="Tipe produk">
 							<button
 								type="button"
-								class:active={!isPreOrder}
+								class:aktif={!isPreOrder}
 								onclick={() => {
 									isPreOrder = false;
 									form.farmland_id = '';
 								}}
 							>
-								<span class="type-icon">📦</span>
-								<span class="type-title">Ready Stock</span>
-								<span class="type-desc">Produk siap kirim (stok fisik)</span>
+								<span class="ikon-jenis">📦</span>
+								<span class="judul-jenis">Ready Stock</span>
+								<span class="deskripsi-jenis">Produk siap kirim (stok fisik)</span>
 							</button>
 							<button
 								type="button"
-								class:active={isPreOrder}
+								class:aktif={isPreOrder}
 								onclick={() => {
 									isPreOrder = true;
 									form.stock = undefined;
 								}}
 							>
-								<span class="type-icon">🌱</span>
-								<span class="type-title">Pre-Order Panen</span>
-								<span class="type-desc">Dijual sebelum panen (wajib pilih lahan)</span>
+								<span class="ikon-jenis">🌱</span>
+								<span class="judul-jenis">Pre-Order Panen</span>
+								<span class="deskripsi-jenis">Dijual sebelum panen (wajib pilih lahan)</span>
 							</button>
 						</div>
 
-						<div class="field-grid">
-							<label class="full">
+						<div class="kisi-bidang">
+							<label class="penuh">
 								Nama Produk
 								<input bind:value={form.name} required minlength="3" maxlength="100" placeholder="Contoh: Beras Pandan Wangi 5 Kg" />
 								<small>Maksimal 100 karakter</small>
@@ -328,22 +365,22 @@
 								</label>
 							{/if}
 
-							<label class="full">
-								URL Gambar Utama
-								<input bind:value={form.image_url_1} placeholder="https://link-gambar-produk.jpg" type="url" />
-								<small>Masukkan link URL gambar produk (format HTTPS). Ukuran disarankan 1:1 / landscape.</small>
+							<label class="penuh">
+								Foto Produk
+								<span class="pemilih-foto"><input type="file" accept="image/jpeg,image/png,image/webp" multiple required onchange={handleImageSelection} /><span class="tombol-pemilih-foto">Pilih foto</span><span class="nama-pemilih-foto">{selectedImages.length ? `${selectedImages.length} foto dipilih` : 'Belum ada foto'}</span></span>
+								<small>Pilih maksimal 5 foto JPG, PNG, atau WebP. Maksimal 5 MB per foto.{selectedImages.length ? ` ${selectedImages.length} foto dipilih.` : ''}</small>
 							</label>
 
 							{#if isPreOrder}
-								<label class="full">
-									<span class="required-inline">
+								<label class="penuh">
+									<span class="sebaris-wajib">
 										Lahan Sumber Panen
 										<abbr title="wajib diisi untuk produk Pre-Order">*</abbr>
 									</span>
 									{#if loadFarmlandError}
-										<div class="mini-error">⚠️ {loadFarmlandError}</div>
+										<div class="galat-mini">⚠️ {loadFarmlandError}</div>
 									{:else if eligibleFarmlands.length === 0}
-										<div class="mini-warn">
+										<div class="peringatan-mini">
 											⚠️ Tidak ada lahan aktif yang dapat dipakai untuk pre-order.
 											{#if currentUser?.farmer_group_id && currentUser.role !== 'group_leader'}<span>Pre-order dari lahan kelompok hanya dapat dibuat oleh ketua kelompok.</span>{:else}<a href="/lahan-tani/create" target="_blank" rel="noopener noreferrer">Buat lahan terlebih dahulu →</a>{/if}
 										</div>
@@ -365,16 +402,16 @@
 								</label>
 							{/if}
 
-							<label class="full">
+							<label class="penuh">
 								Deskripsi Produk
 								<textarea bind:value={form.description} rows="6" minlength="10" maxlength="1500" required placeholder="Deskripsikan produk, manfaat, cara penggunaan, kemasan, keunggulan, dll"></textarea>
 								<small>{form.description?.length || 0} / 1500 karakter</small>
 							</label>
 						</div>
 
-						<div class="form-actions">
-							<a href="/toko" class="cancel">Batal</a>
-							<button class="primary" type="submit" disabled={isSaving}>
+						<div class="aksi-formulir">
+							<a href="/toko" class="batal">Batal</a>
+							<button class="utama" type="submit" disabled={isSaving}>
 								{isSaving ? 'Menyimpan produk...' : 'Buat Produk'}
 							</button>
 						</div>
@@ -386,13 +423,13 @@
 </div>
 
 <style>
-	.edit-main {
+	.utama-ubah {
+		width: 100%;
 		max-width: 1180px;
 		margin: auto;
 		padding: 36px 28px 80px;
 	}
-
-	.back-link {
+	.tautan-kembali {
 		display: inline-block;
 		margin-bottom: 26px;
 		color: #39754b;
@@ -400,8 +437,7 @@
 		font-weight: 700;
 		text-decoration: none;
 	}
-
-	.state {
+	.keadaan {
 		padding: 50px;
 		text-align: center;
 		border: 1px solid #d6e1d5;
@@ -409,37 +445,44 @@
 		background: #fff;
 		color: #718077;
 	}
-
-	.grid-layout {
+	.tata-kisi {
 		display: grid;
-		grid-template-columns: minmax(320px, 0.9fr) 1.2fr;
+		grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.2fr);
 		gap: 28px;
 		align-items: flex-start;
 	}
-
-	.preview-card {
-		position: sticky;
-		top: 20px;
+	.kartu-pratinjau, .bagian-formulir {
+		min-width: 0;
+	}
+	.kartu-pratinjau {
+		position: static;
 		border: 1px solid #d6e1d5;
 		border-radius: 14px;
 		background: #fff;
 		overflow: hidden;
 		box-shadow: 0 8px 24px #23472e0c;
 	}
-	.preview-image {
+	.gambar-pratinjau {
 		position: relative;
 		display: grid;
 		place-items: center;
-		height: 240px;
+		width: 100%;
+		aspect-ratio: 1 / 1;
+		height: auto;
+		overflow: hidden;
 		background: #dcebd8;
 	}
-	.preview-image img {
+	.gambar-pratinjau img {
+		display: block;
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
+		object-position: center;
 	}
-	.ph { font-size: 80px; }
-	.tag {
+	.petunjuk {
+		font-size: 80px;
+	}
+	.label {
 		position: absolute;
 		top: 14px;
 		left: 14px;
@@ -451,35 +494,39 @@
 		font-weight: 800;
 		letter-spacing: 0.08em;
 	}
-	.tag.po { background: #a8762e; }
-	.preview-body { padding: 26px 26px 28px; }
-	.eyebrow {
+	.label.pra-pesan {
+		background: #a8762e;
+	}
+	.isi-pratinjau {
+		padding: 26px 26px 28px;
+	}
+	.label-kecil {
 		margin: 0 0 10px;
 		color: #4e805a;
 		font-size: 11px;
 		font-weight: 800;
 		letter-spacing: 0.16em;
 	}
-	.preview-body h1 {
+	.isi-pratinjau h1 {
 		margin: 0;
 		font: 600 28px/1.1 'Fraunces', Georgia, serif;
 	}
-	.shop-link {
+	.tautan-toko {
 		margin: 8px 0 16px;
 		color: #718077;
 		font-size: 13px;
 	}
-	.price-big {
+	.besar-harga {
 		display: inline-block;
 		color: #39754b;
 		font: 800 32px 'DM Sans', sans-serif;
 	}
-	.stock-info {
+	.informasi-stok {
 		margin: 18px 0 16px;
 		display: grid;
 		gap: 8px;
 	}
-	.po-info, .stock-info-inline {
+	.informasi-pra-pesan, .sebaris-informasi-stok {
 		display: flex;
 		justify-content: space-between;
 		padding: 10px 14px;
@@ -487,11 +534,24 @@
 		background: #f4faf2;
 		font-size: 13px;
 	}
-	.po-info span, .stock-info-inline span { color: #5b6e62; font-weight: 600; }
-	.po-info strong { background: #eaf4e9; color: #183126; border-radius: 4px; padding: 2px 8px; font-size: 12px; }
-	.stock-info-inline strong { color: #2f6a41; }
-	.po-info.ok { background: #edf8ed; }
-	.description-preview {
+	.informasi-pra-pesan span, .sebaris-informasi-stok span {
+		color: #5b6e62;
+		font-weight: 600;
+	}
+	.informasi-pra-pesan strong {
+		background: #eaf4e9;
+		color: #183126;
+		border-radius: 4px;
+		padding: 2px 8px;
+		font-size: 12px;
+	}
+	.sebaris-informasi-stok strong {
+		color: #2f6a41;
+	}
+	.informasi-pra-pesan.berhasil {
+		background: #edf8ed;
+	}
+	.pratinjau-deskripsi {
 		margin: 0;
 		padding: 14px;
 		background: #fbfdfb;
@@ -502,31 +562,43 @@
 		line-height: 1.6;
 		white-space: pre-wrap;
 	}
-
-	.form-section { display: grid; gap: 20px; }
-	.page-heading { margin-bottom: 4px; }
-	.page-heading h1 {
+	.bagian-formulir {
+		display: grid;
+		gap: 20px;
+	}
+	.judul-halaman {
+		margin-bottom: 4px;
+	}
+	.judul-halaman h1 {
 		margin: 0;
 		font: 600 clamp(28px, 4vw, 42px)/1 'Fraunces', Georgia, serif;
 	}
-	.subtitle {
+	.subjudul {
 		margin: 12px 0 0;
 		color: #718077;
 		line-height: 1.55;
 	}
-	.subtitle strong { color: #385540; }
-
-	.alert {
+	.subjudul strong {
+		color: #385540;
+	}
+	.peringatan {
 		padding: 14px 18px;
 		border-radius: 8px;
 		margin-bottom: 6px;
 		font-size: 14px;
 		font-weight: 600;
 	}
-	.alert.error { background: #fff0ef; color: #a44242; border: 1px solid #e6b8b3; }
-	.alert.success { background: #edf8ed; color: #39754b; border: 1px solid #a9c9aa; }
-
-	.form-card {
+	.peringatan.galat {
+		background: #fff0ef;
+		color: #a44242;
+		border: 1px solid #e6b8b3;
+	}
+	.peringatan.berhasil {
+		background: #edf8ed;
+		color: #39754b;
+		border: 1px solid #a9c9aa;
+	}
+	.kartu-formulir {
 		display: grid;
 		gap: 22px;
 		border: 1px solid #d6e1d5;
@@ -535,13 +607,12 @@
 		padding: 30px;
 		box-shadow: 0 8px 22px #23472e0f;
 	}
-
-	.type-switcher {
+	.pengalih-jenis {
 		display: grid;
 		grid-template-columns: repeat(2, 1fr);
 		gap: 14px;
 	}
-	.type-switcher button {
+	.pengalih-jenis button {
 		display: grid;
 		justify-items: start;
 		gap: 6px;
@@ -555,26 +626,33 @@
 		color: #385540;
 		transition: all 0.15s ease;
 	}
-	.type-switcher button:hover { border-color: #9fc6a5; background: #f2f9f0; }
-	.type-switcher button.active {
+	.pengalih-jenis button:hover {
+		border-color: #9fc6a5;
+		background: #f2f9f0;
+	}
+	.pengalih-jenis button.aktif {
 		border-color: #39754b;
 		background: linear-gradient(180deg, #eff8f0 0%, #e3f1e4 100%);
 		box-shadow: 0 6px 18px #39754b18;
 	}
-	.type-icon { font-size: 26px; line-height: 1; }
-	.type-title {
+	.ikon-jenis {
+		font-size: 26px;
+		line-height: 1;
+	}
+	.judul-jenis {
 		font: 700 16px 'DM Sans', sans-serif;
 		color: #183126;
 	}
-	.type-switcher button.active .type-title { color: #2a6039; }
-	.type-desc {
+	.pengalih-jenis button.aktif .judul-jenis {
+		color: #2a6039;
+	}
+	.deskripsi-jenis {
 		font-size: 12px;
 		color: #5b6e62;
 		font-weight: 500;
 		line-height: 1.4;
 	}
-
-	.field-grid {
+	.kisi-bidang {
 		display: grid;
 		grid-template-columns: repeat(2, 1fr);
 		gap: 18px;
@@ -586,27 +664,41 @@
 		font-size: 13px;
 		font-weight: 700;
 	}
-	label.full { grid-column: span 2; }
-	.required-inline {
+	label.penuh {
+		grid-column: span 2;
+	}
+	.sebaris-wajib {
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
 	}
-	.required-inline abbr {
+	.sebaris-wajib abbr {
 		color: #a44242;
 		text-decoration: none;
 		font-weight: 900;
 	}
-	.mini-error, .mini-warn {
+	.galat-mini, .peringatan-mini {
 		padding: 10px 12px;
 		border-radius: 7px;
 		font-size: 12px;
 		font-weight: 600;
 		line-height: 1.4;
 	}
-	.mini-error { background: #fff0ef; color: #a44242; border: 1px solid #e6b8b3; }
-	.mini-warn { background: #fff8e8; color: #825a17; border: 1px solid #e8d39a; }
-	.mini-warn a { color: #39754b; text-decoration: underline; margin-left: 6px; }
+	.galat-mini {
+		background: #fff0ef;
+		color: #a44242;
+		border: 1px solid #e6b8b3;
+	}
+	.peringatan-mini {
+		background: #fff8e8;
+		color: #825a17;
+		border: 1px solid #e8d39a;
+	}
+	.peringatan-mini a {
+		color: #39754b;
+		text-decoration: underline;
+		margin-left: 6px;
+	}
 	input, textarea, select {
 		box-sizing: border-box;
 		width: 100%;
@@ -623,28 +715,32 @@
 		border-color: #5c9568;
 		box-shadow: 0 0 0 3px #5c95681c;
 	}
-	select:disabled { opacity: 0.6; cursor: not-allowed; }
+	select:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
 	label small {
 		color: #718077;
 		font-weight: 500;
 		font-size: 12px;
 	}
-	textarea { resize: vertical; }
-
-	.form-actions {
+	textarea {
+		resize: vertical;
+	}
+	.aksi-formulir {
 		display: flex;
 		justify-content: flex-end;
 		gap: 14px;
 		padding-top: 6px;
 	}
-	.cancel {
+	.batal {
 		color: #385540;
 		text-decoration: none;
 		font-weight: 700;
 		font-size: 14px;
 		padding: 14px 0;
 	}
-	.primary {
+	.utama {
 		padding: 13px 22px;
 		border-radius: 8px;
 		background: #39754b;
@@ -656,14 +752,16 @@
 		cursor: pointer;
 		box-shadow: 0 8px 18px #39754b26;
 	}
-	.primary:disabled { opacity: 0.6; cursor: not-allowed; }
-
-	.no-shop {
+	.utama:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+	.toko-tanpa {
 		display: grid;
 		place-items: center;
 		padding: 30px 20px;
 	}
-	.no-shop-card {
+	.kartu-toko-tanpa {
 		max-width: 620px;
 		padding: 50px 44px;
 		text-align: center;
@@ -672,24 +770,27 @@
 		background: #fff;
 		box-shadow: 0 12px 34px #23472e10;
 	}
-	.no-shop-icon { font-size: 72px; margin-bottom: 16px; }
-	.no-shop-card h1 {
+	.ikon-toko-tanpa {
+		font-size: 72px;
+		margin-bottom: 16px;
+	}
+	.kartu-toko-tanpa h1 {
 		margin: 0;
 		font: 600 clamp(28px, 5vw, 44px)/1 'Fraunces', Georgia, serif;
 	}
-	.subtitle {
+	.subjudul-toko-kosong {
 		margin: 16px auto 30px;
 		color: #718077;
 		line-height: 1.6;
 		max-width: 460px;
 	}
-	.cta-row {
+	.baris-ajakan {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 12px;
 		justify-content: center;
 	}
-	.cta-row .primary-btn {
+	.baris-ajakan .tombol-utama {
 		display: inline-block;
 		padding: 14px 20px;
 		border-radius: 8px;
@@ -700,7 +801,7 @@
 		text-decoration: none;
 		box-shadow: 0 8px 18px #39754b26;
 	}
-	.cta-row .secondary-btn {
+	.baris-ajakan .tombol-pendukung {
 		display: inline-block;
 		padding: 14px 20px;
 		border-radius: 8px;
@@ -711,14 +812,62 @@
 		font-size: 14px;
 		text-decoration: none;
 	}
-
 	@media (max-width: 1000px) {
-		.grid-layout { grid-template-columns: 1fr; }
-		.preview-card { position: static; }
+		.tata-kisi {
+			grid-template-columns: 1fr;
+		}
 	}
 	@media (max-width: 760px) {
-		.field-grid { grid-template-columns: 1fr; }
-		label.full { grid-column: span 1; }
-		.type-switcher { grid-template-columns: 1fr; }
+		.kisi-bidang {
+			grid-template-columns: 1fr;
+		}
+		label.penuh {
+			grid-column: span 1;
+		}
+		.pengalih-jenis {
+			grid-template-columns: 1fr;
+		}
+	}
+	.pemilih-foto {
+		display: flex;
+		width: fit-content;
+		align-items: center;
+		gap: 10px;
+	}
+	.pemilih-foto input {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+	}
+	.tombol-pemilih-foto {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 36px;
+		border: 1px solid #39754b;
+		border-radius: 7px;
+		background: #edf8ed;
+		color: #39754b;
+		padding: 8px 14px;
+		font-size: 12px;
+		font-weight: 800;
+		cursor: pointer;
+		transition: background .15s, color .15s;
+	}
+	.pemilih-foto:hover .tombol-pemilih-foto {
+		background: #39754b;
+		color: #fff;
+	}
+	.pemilih-foto:focus-within .tombol-pemilih-foto {
+		outline: 3px solid #5c95684d;
+		outline-offset: 2px;
+	}
+	.nama-pemilih-foto {
+		color: #718077;
+		font-size: 11px;
+		font-weight: 400;
 	}
 </style>

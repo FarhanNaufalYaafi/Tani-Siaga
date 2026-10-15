@@ -32,6 +32,30 @@ export class BookedOrder {
   @Column({ name: 'total_price' })
   totalPrice!: number;
 
+  @Column({ name: 'deposit_amount', type: 'int', default: 0 })
+  depositAmount!: number;
+
+  @Column({ name: 'remaining_amount', type: 'int', default: 0 })
+  remainingAmount!: number;
+
+  @Column({ name: 'deposit_status', type: 'varchar', length: 20, default: 'unpaid' })
+  depositStatus!: 'unpaid' | 'pending' | 'paid' | 'failed' | 'expired';
+
+  @Column({ name: 'deposit_midtrans_order_id', type: 'varchar', length: 60, nullable: true, unique: true })
+  depositMidtransOrderId!: string | null;
+
+  @Column({ name: 'deposit_midtrans_transaction_id', type: 'varchar', length: 100, nullable: true, unique: true })
+  depositMidtransTransactionId!: string | null;
+
+  @Column({ name: 'deposit_payment_url', type: 'text', nullable: true })
+  depositPaymentUrl!: string | null;
+
+  @Column({ name: 'deposit_expires_at', type: 'timestamp', nullable: true })
+  depositExpiresAt!: Date | null;
+
+  @Column({ name: 'balance_payment_url', type: 'text', nullable: true })
+  balancePaymentUrl!: string | null;
+
   @Column({ length: 150 })
   recipientName!: string;
 

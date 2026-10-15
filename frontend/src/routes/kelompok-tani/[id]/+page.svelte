@@ -265,85 +265,87 @@
   <title>{group ? group.name : 'Detail Kelompok Tani'} | Tani Siaga</title>
 </svelte:head>
 
-<main class="page-shell">
-  <div class="page-container">
-    <a href="/kelompok-tani" class="back-link">← Kembali ke Daftar Kelompok Tani</a>
+<main class="kerangka-halaman">
+  <div class="wadah-halaman">
+    <a href="/kelompok-tani" class="tautan-kembali">← Kembali ke Daftar Kelompok Tani</a>
 
     {#if isLoading}
-      <div class="state loading-card" aria-label="Memuat detail kelompok tani">
+      <div class="keadaan kartu-memuat" aria-label="Memuat detail kelompok tani">
         <span></span><span></span><span></span>
       </div>
     {:else if errorMessage}
-      <div class="state error-state" role="alert">
+      <div class="keadaan keadaan-galat" role="alert">
         <p>{errorMessage}</p>
-        <a href="/kelompok-tani" class="secondary-button">Kembali ke daftar</a>
+        <a href="/kelompok-tani" class="tombol-pendukung">Kembali ke daftar</a>
       </div>
     {:else if group}
-      <article class="detail-card">
-        <header class="detail-heading">
-          <div class="group-identity">
-            <p class="eyebrow">KELOMPOK TANI</p>
-            <div class="title-row">
-              <h1>{group.name}</h1>
-              {#if isLeader}<span class="leader-badge">Ketua (Anda)</span>{/if}
+      <article class="kartu-rincian">
+        <header class="judul-rincian">
+          <div class="identitas-kelompok">
+            <p class="label-kecil">KELOMPOK TANI</p>
+            <div class="baris-judul">
+              <h1 class="judul">{group.name}</h1>
+              {#if isLeader}<span class="lencana-pemimpin">Ketua (Anda)</span>{/if}
             </div>
-            <p class="group-code">ID Poktan · {group.poktan_id || 'Belum terverifikasi'}</p>
+            <p class="kode-kelompok">ID Poktan · {group.poktan_id || 'Belum terverifikasi'}</p>
           </div>
 
           {#if isLeader}
-            <div class="header-actions">
-              <button type="button" class="warning-button" onclick={openPendingModal}>Menunggu persetujuan</button>
-              <button type="button" class="primary-button" onclick={handleAddMember}>+ Tambahkan anggota</button>
+            <div class="aksi-bilah">
+              <button type="button" class="tombol-peringatan" onclick={openPendingModal}>Menunggu persetujuan</button>
+              <button type="button" class="tombol-utama" onclick={handleAddMember}>+ Tambahkan anggota</button>
             </div>
+          {:else if currentUser?.role === 'admin'}
+            <span class="lencana-pemimpin">Admin</span>
           {:else if isRegularMember}
-            <button type="button" class="danger-button" onclick={handleLeaveGroup} disabled={isLeaving}>
+            <button type="button" class="tombol-bahaya" onclick={handleLeaveGroup} disabled={isLeaving}>
               {isLeaving ? 'Memproses...' : 'Keluar kelompok'}
             </button>
           {:else if isPending}
-            <span class="pending-badge">Menunggu respons</span>
+            <span class="lencana-menunggu">Menunggu respons</span>
           {:else}
-            <button type="button" class="primary-button" onclick={handleApply} disabled={isApplying}>
+            <button type="button" class="tombol-utama" onclick={handleApply} disabled={isApplying}>
               {isApplying ? 'Mengajukan...' : applicationStatus === 'rejected' ? 'Ajukan bergabung kembali' : 'Ajukan bergabung'}
             </button>
           {/if}
         </header>
 
-        <div class="info-grid">
-          <div class="info-item"><span>Ketua kelompok</span><strong>{leaderEmail}</strong></div>
-          <div class="info-item"><span>Jumlah anggota</span><strong>{group.members?.length || 0} anggota</strong></div>
+        <div class="kisi-informasi">
+          <div class="butir-informasi"><span>Ketua kelompok</span><strong>{leaderEmail}</strong></div>
+          <div class="butir-informasi"><span>Jumlah anggota</span><strong>{group.members?.length || 0} anggota</strong></div>
         </div>
 
         {#if group.address}
-          <section class="text-section">
+          <section class="bagian-teks">
             <h2>Alamat</h2>
             <p>{group.address}</p>
           </section>
         {/if}
 
-        <section class="text-section">
+        <section class="bagian-teks">
           <h2>Deskripsi kelompok</h2>
           <p>{group.description || 'Belum ada deskripsi yang ditambahkan untuk kelompok tani ini.'}</p>
         </section>
 
-        <section class="members-section">
-          <div class="section-heading"><h2>Daftar anggota</h2><span>{group.members?.length || 0} anggota</span></div>
+        <section class="bagian-anggota">
+          <div class="judul-bagian"><h2>Daftar anggota</h2><span>{group.members?.length || 0} anggota</span></div>
           {#if !group.members || group.members.length === 0}
-            <p class="status-text">Belum ada anggota di kelompok ini.</p>
+            <p class="teks-status">Belum ada anggota di kelompok ini.</p>
           {:else}
-            <div class="member-list">
+            <div class="daftar-anggota">
               {#each group.members as member (member.id)}
-                <div class="member-row">
-                  <div class="member-info">
-                    <p class="member-email">{member.email}</p>
-                    <span class="member-role">{member.role?.replace('_', ' ') || 'member'}</span>
+                <div class="baris-anggota">
+                  <div class="informasi-anggota">
+                    <p class="email-anggota">{member.email}</p>
+                    <span class="peran-anggota">{member.role?.replace('_', ' ') || 'member'}</span>
                   </div>
-                  <div class="member-actions">
+                  <div class="aksi-anggota">
                     {#if isLeader && Number(member.id) !== Number(group.group_leader_id)}
-                      <button type="button" class="remove-button" onclick={() => handleRemoveMember(member.id)} disabled={actionLoadingId === member.id}>
+                      <button type="button" class="tombol-hapus" onclick={() => handleRemoveMember(member.id)} disabled={actionLoadingId === member.id}>
                         {actionLoadingId === member.id ? '...' : 'Keluarkan'}
                       </button>
                     {/if}
-                    {#if Number(member.id) === Number(group.group_leader_id)}<span class="leader-badge">Ketua</span>{/if}
+                    {#if Number(member.id) === Number(group.group_leader_id)}<span class="lencana-pemimpin">Ketua</span>{/if}
                   </div>
                 </div>
               {/each}
@@ -351,16 +353,16 @@
           {/if}
         </section>
 
-        <section class="farmland-section">
-          <div class="section-heading"><h2>Lahan kelompok tani</h2><span>{groupFarmlands.length} lahan</span></div>
+        <section class="bagian-lahan">
+          <div class="judul-bagian"><h2>Lahan kelompok tani</h2><span>{groupFarmlands.length} lahan</span></div>
           {#if isLoadingFarmlands}
-            <p class="status-text">Memuat daftar lahan...</p>
+            <p class="teks-status">Memuat daftar lahan...</p>
           {:else if groupFarmlands.length === 0}
-            <p class="status-text">Belum ada lahan yang terdaftar pada kelompok tani ini.</p>
+            <p class="teks-status">Belum ada lahan yang terdaftar pada kelompok tani ini.</p>
           {:else}
-            <div class="farmland-grid">
+            <div class="kisi-lahan">
               {#each groupFarmlands as item (item.id)}
-                <article class="farmland-card">
+                <article class="kartu-lahan">
                   <h3>{item.name || 'Lahan Tani'}</h3>
                   <p><strong>Pemilik</strong><span>{item.user?.email || '-'}</span></p>
                   <p><strong>Komoditas</strong><span>{item.commodity?.name || '-'}</span></p>
@@ -377,31 +379,31 @@
 
 <!-- ================= POPUP / MODAL: DAFTAR MENUNGGU PERSETUJUAN ================= -->
 {#if showPendingModal}
-  <div class="modal-overlay">
-    <div class="modal-card">
-      <div class="modal-header">
+  <div class="lapisan-dialog">
+    <div class="kartu-dialog">
+      <div class="bilah-dialog">
         <h3>⏳ Menunggu Persetujuan Ketua</h3>
-        <button type="button" class="close-btn" onclick={() => (showPendingModal = false)}>✕</button>
+        <button type="button" class="tombol-tutup" onclick={() => (showPendingModal = false)}>✕</button>
       </div>
 
-      <div class="modal-body">
+      <div class="isi-dialog">
         {#if isLoadingPending}
-          <div class="loading-state">Memuat calon anggota...</div>
+          <div class="keadaan-memuat">Memuat calon anggota...</div>
         {:else if pendingList.length === 0}
-          <div class="empty-state">Tidak ada calon anggota yang menunggu persetujuan.</div>
+          <div class="keadaan-kosong">Tidak ada calon anggota yang menunggu persetujuan.</div>
         {:else}
-          <div class="pending-list">
+          <div class="daftar-menunggu">
             {#each pendingList as pendingMember (pendingMember.id)}
-              <div class="pending-item">
-                <div class="member-info">
-                  <p class="member-email">{pendingMember.email}</p>
-                  <span class="member-id">ID: {pendingMember.id}</span>
+              <div class="butir-menunggu">
+                <div class="informasi-anggota">
+                  <p class="email-anggota">{pendingMember.email}</p>
+                  <span class="id-anggota">ID: {pendingMember.id}</span>
                 </div>
 
-                <div class="action-buttons">
+                <div class="tombol-aksi">
                   <button
                     type="button"
-                    class="btn-approve"
+                    class="setujui-tombol"
                     onclick={() => handleApprove(pendingMember.id)}
                     disabled={actionLoadingId === pendingMember.id}
                   >
@@ -410,7 +412,7 @@
 
                   <button
                     type="button"
-                    class="btn-reject"
+                    class="tolak-tombol"
                     onclick={() => handleReject(pendingMember.id)}
                     disabled={actionLoadingId === pendingMember.id}
                   >
@@ -423,89 +425,494 @@
         {/if}
       </div>
 
-      <div class="modal-footer">
-        <button type="button" class="btn-close" onclick={() => (showPendingModal = false)}>Tutup</button>
+      <div class="kaki-halaman-dialog">
+        <button type="button" class="tutup-tombol" onclick={() => (showPendingModal = false)}>Tutup</button>
       </div>
     </div>
   </div>
 {/if}
 
 <style>
-  .page-shell { min-height: 100vh; box-sizing: border-box; background: #f4f7f1; color: #183126; padding: 36px 20px 68px; }
-  .page-container { width: min(100%, 1000px); margin: 0 auto; }
-  .back-link { display: inline-block; margin-bottom: 24px; color: #39754b; font-size: 13px; font-weight: 700; text-decoration: none; }
-  .back-link:hover { text-decoration: underline; }
-  .detail-card, .state { border: 1px solid #d6e1d5; border-radius: 10px; background: #fff; box-shadow: 0 8px 22px #23472e0f; }
-  .detail-card { display: grid; gap: 24px; padding: 28px; }
-  .detail-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid #e8eee6; padding-bottom: 22px; }
-  .group-identity { min-width: 0; }
-  .eyebrow { margin: 0 0 8px; color: #4e805a; font-size: 11px; font-weight: 800; letter-spacing: .14em; }
-  .title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
-  h1 { margin: 0; color: #183126; font: 600 clamp(30px, 4vw, 42px)/1.08 'Fraunces', Georgia, serif; overflow-wrap: anywhere; }
-  .group-code { margin: 9px 0 0; color: #4e805a; font-size: 12px; }
-  .header-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-  .primary-button, .secondary-button, .warning-button, .danger-button, .remove-button, .btn-approve, .btn-reject, .btn-close { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; border: 1px solid transparent; border-radius: 7px; padding: 8px 12px; font: inherit; font-size: 12px; font-weight: 700; line-height: 1.25; text-decoration: none; cursor: pointer; transition: background-color .18s, border-color .18s, opacity .18s; }
-  .primary-button { border-color: #39754b; background: #39754b; color: #fff; }
-  .primary-button:hover:not(:disabled) { border-color: #2d603c; background: #2d603c; }
-  .secondary-button { border-color: #39754b; background: #fff; color: #39754b; }
-  .secondary-button:hover { background: #f4faf2; }
-  .warning-button, .pending-badge { border-color: #e6d4a9; background: #fff8e7; color: #946b26; }
-  .danger-button, .remove-button { border-color: #edc9c6; background: #fff0ef; color: #a44242; }
-  .danger-button:hover:not(:disabled), .remove-button:hover:not(:disabled), .btn-reject:hover:not(:disabled) { background: #ffe4e1; }
-  button:disabled { cursor: not-allowed; opacity: .6; }
-  button:focus-visible, .secondary-button:focus-visible { outline: 3px solid #5c95684d; outline-offset: 2px; }
-  .leader-badge, .pending-badge { display: inline-flex; align-items: center; flex: 0 0 auto; border: 1px solid #d6e8d5; border-radius: 999px; background: #eaf4e9; color: #39754b; padding: 5px 9px; font-size: 11px; font-weight: 700; }
-  .pending-badge { border-color: #e6d4a9; background: #fff8e7; color: #946b26; }
-  .info-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-  .info-item { display: grid; gap: 6px; min-width: 0; border: 1px solid #d6e1d5; border-radius: 8px; background: #f9fbf8; padding: 14px; }
-  .info-item span, .section-heading > span { color: #718077; font-size: 12px; }
-  .info-item strong { overflow: hidden; color: #274a32; font-size: 13px; text-overflow: ellipsis; }
-  .text-section { display: grid; gap: 7px; }
-  .text-section h2, .section-heading h2 { margin: 0; color: #183126; font-size: 17px; }
-  .text-section p { margin: 0; color: #718077; font-size: 13px; line-height: 1.65; white-space: pre-line; }
-  .members-section, .farmland-section { border-top: 1px solid #e8eee6; padding-top: 20px; }
-  .section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 13px; }
-  .member-list { display: grid; max-height: 300px; gap: 8px; overflow-y: auto; padding-right: 3px; }
-  .member-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid #e1e9df; border-radius: 8px; background: #fbfdfb; padding: 11px 13px; }
-  .member-info { display: grid; min-width: 0; gap: 4px; }
-  .member-email { margin: 0; overflow: hidden; color: #274a32; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-  .member-role { color: #718077; font-size: 11px; text-transform: capitalize; }
-  .member-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
-  .remove-button { min-height: 30px; padding: 5px 9px; font-size: 11px; }
-  .status-text { margin: 0; color: #718077; font-size: 13px; }
-  .farmland-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 11px; }
-  .farmland-card { border: 1px solid #d6e1d5; border-radius: 8px; background: #f9fbf8; padding: 14px; }
-  .farmland-card h3 { margin: 0 0 12px; color: #274a32; font-size: 15px; overflow-wrap: anywhere; }
-  .farmland-card p { display: flex; justify-content: space-between; gap: 10px; margin: 7px 0 0; color: #718077; font-size: 11px; }
-  .farmland-card p strong { color: #385540; font-weight: 700; }
-  .farmland-card p span { text-align: right; overflow-wrap: anywhere; }
-  .state { padding: 30px; }
-  .loading-card { display: grid; gap: 14px; min-height: 150px; }
-  .loading-card span { height: 14px; border-radius: 4px; background: #e8eee6; animation: pulse 1.3s ease-in-out infinite alternate; }
-  .loading-card span:first-child { width: 55%; height: 23px; }.loading-card span:last-child { width: 80%; }
-  .error-state { display: grid; justify-items: center; gap: 14px; text-align: center; }
-  .error-state p { margin: 0; color: #a44242; font-size: 14px; }
-  .modal-overlay { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; box-sizing: border-box; background: #18312680; backdrop-filter: blur(3px); padding: 16px; }
-  .modal-card { display: flex; width: min(100%, 480px); max-height: min(600px, 90vh); flex-direction: column; overflow: hidden; border: 1px solid #d6e1d5; border-radius: 10px; background: #fff; color: #183126; box-shadow: 0 18px 50px #18312630; }
-  .modal-header, .modal-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 18px; }
-  .modal-header { border-bottom: 1px solid #e8eee6; }
-  .modal-header h3 { margin: 0; color: #183126; font-size: 16px; }
-  .close-btn { border: 0; background: transparent; color: #718077; padding: 3px 7px; font-size: 18px; cursor: pointer; }
-  .close-btn:hover { color: #183126; }
-  .modal-body { overflow-y: auto; padding: 16px 18px; }
-  .loading-state, .empty-state { padding: 22px 0; color: #718077; font-size: 13px; text-align: center; }
-  .pending-list { display: grid; gap: 8px; }
-  .pending-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid #e1e9df; border-radius: 8px; background: #fbfdfb; padding: 11px; }
-  .member-id { color: #718077; font-size: 11px; }
-  .action-buttons { display: flex; flex: 0 0 auto; gap: 7px; }
-  .btn-approve { border-color: #39754b; background: #39754b; color: #fff; }
-  .btn-approve:hover:not(:disabled) { background: #2d603c; }
-  .btn-reject { border-color: #edc9c6; background: #fff0ef; color: #a44242; }
-  .modal-footer { justify-content: flex-end; border-top: 1px solid #e8eee6; background: #f9fbf8; }
-  .btn-close { border-color: #d6e1d5; background: #fff; color: #385540; }
-  .btn-close:hover { background: #f4f7f1; }
-  @keyframes pulse { to { opacity: .55; } }
-  @media (max-width: 700px) { .detail-heading { align-items: flex-start; flex-direction: column; }.header-actions { justify-content: flex-start; }.detail-heading > button, .header-actions > button { width: 100%; }.info-grid { grid-template-columns: 1fr; } }
-  @media (max-width: 560px) { .page-shell { padding: 28px 14px 54px; }.detail-card { gap: 20px; padding: 20px 16px; }.state { padding: 22px 16px; }.title-row { align-items: flex-start; flex-direction: column; gap: 8px; }.member-row, .pending-item { align-items: flex-start; }.member-actions { flex-direction: column-reverse; align-items: flex-end; }.farmland-card p { align-items: flex-start; flex-direction: column; gap: 3px; }.farmland-card p span { text-align: left; }.action-buttons { flex-direction: column; } }
-  @media (prefers-reduced-motion: reduce) { .loading-card span { animation: none; } }
+	.kerangka-halaman {
+		min-height: 100vh;
+		box-sizing: border-box;
+		background: #f4f7f1;
+		color: #183126;
+		padding: 36px 20px 68px;
+	}
+	.wadah-halaman {
+		width: min(100%, 1000px);
+		margin: 0 auto;
+	}
+	.tautan-kembali {
+		display: inline-block;
+		margin-bottom: 24px;
+		color: #39754b;
+		font-size: 13px;
+		font-weight: 700;
+		text-decoration: none;
+	}
+	.tautan-kembali:hover {
+		text-decoration: underline;
+	}
+	.kartu-rincian, .keadaan {
+		border: 1px solid #d6e1d5;
+		border-radius: 10px;
+		background: #fff;
+		box-shadow: 0 8px 22px #23472e0f;
+	}
+	.kartu-rincian {
+		display: grid;
+		gap: 24px;
+		padding: 28px;
+	}
+	.judul-rincian {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 20px;
+		border-bottom: 1px solid #e8eee6;
+		padding-bottom: 22px;
+	}
+	.identitas-kelompok {
+		min-width: 0;
+	}
+	.label-kecil {
+		margin: 0 0 8px;
+		color: #4e805a;
+		font-size: 11px;
+		font-weight: 800;
+		letter-spacing: .14em;
+	}
+	.baris-judul {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 10px;
+	}
+	h1 {
+		margin: 0;
+		color: #183126;
+		font: 600 clamp(30px, 4vw, 42px)/1.08 'Fraunces', Georgia, serif;
+		overflow-wrap: anywhere;
+	}
+	.kode-kelompok {
+		margin: 9px 0 0;
+		color: #4e805a;
+		font-size: 12px;
+	}
+	.aksi-bilah {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		gap: 8px;
+	}
+	.tombol-utama, .tombol-pendukung, .tombol-peringatan, .tombol-bahaya, .tombol-hapus, .setujui-tombol, .tolak-tombol, .tutup-tombol {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 38px;
+		border: 1px solid transparent;
+		border-radius: 7px;
+		padding: 8px 12px;
+		font: inherit;
+		font-size: 12px;
+		font-weight: 700;
+		line-height: 1.25;
+		text-decoration: none;
+		cursor: pointer;
+		transition: background-color .18s, border-color .18s, opacity .18s;
+	}
+	.tombol-utama {
+		border-color: #39754b;
+		background: #39754b;
+		color: #fff;
+	}
+	.tombol-utama:hover:not(:disabled) {
+		border-color: #2d603c;
+		background: #2d603c;
+	}
+	.tombol-pendukung {
+		border-color: #39754b;
+		background: #fff;
+		color: #39754b;
+	}
+	.tombol-pendukung:hover {
+		background: #f4faf2;
+	}
+	.tombol-peringatan, .lencana-menunggu {
+		border-color: #e6d4a9;
+		background: #fff8e7;
+		color: #946b26;
+	}
+	.tombol-bahaya, .tombol-hapus {
+		border-color: #edc9c6;
+		background: #fff0ef;
+		color: #a44242;
+	}
+	.tombol-bahaya:hover:not(:disabled), .tombol-hapus:hover:not(:disabled), .tolak-tombol:hover:not(:disabled) {
+		background: #ffe4e1;
+	}
+	button:disabled {
+		cursor: not-allowed;
+		opacity: .6;
+	}
+	button:focus-visible, .tombol-pendukung:focus-visible {
+		outline: 3px solid #5c95684d;
+		outline-offset: 2px;
+	}
+	.lencana-pemimpin, .lencana-menunggu {
+		display: inline-flex;
+		align-items: center;
+		flex: 0 0 auto;
+		border: 1px solid #d6e8d5;
+		border-radius: 999px;
+		background: #eaf4e9;
+		color: #39754b;
+		padding: 5px 9px;
+		font-size: 11px;
+		font-weight: 700;
+	}
+	.lencana-menunggu {
+		border-color: #e6d4a9;
+		background: #fff8e7;
+		color: #946b26;
+	}
+	.kisi-informasi {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 12px;
+	}
+	.butir-informasi {
+		display: grid;
+		gap: 6px;
+		min-width: 0;
+		border: 1px solid #d6e1d5;
+		border-radius: 8px;
+		background: #f9fbf8;
+		padding: 14px;
+	}
+	.butir-informasi span, .judul-bagian > span {
+		color: #718077;
+		font-size: 12px;
+	}
+	.butir-informasi strong {
+		overflow: hidden;
+		color: #274a32;
+		font-size: 13px;
+		text-overflow: ellipsis;
+	}
+	.bagian-teks {
+		display: grid;
+		gap: 7px;
+	}
+	.bagian-teks h2, .judul-bagian h2 {
+		margin: 0;
+		color: #183126;
+		font-size: 17px;
+	}
+	.bagian-teks p {
+		margin: 0;
+		color: #718077;
+		font-size: 13px;
+		line-height: 1.65;
+		white-space: pre-line;
+	}
+	.bagian-anggota, .bagian-lahan {
+		border-top: 1px solid #e8eee6;
+		padding-top: 20px;
+	}
+	.judul-bagian {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 12px;
+		margin-bottom: 13px;
+	}
+	.daftar-anggota {
+		display: grid;
+		max-height: 300px;
+		gap: 8px;
+		overflow-y: auto;
+		padding-right: 3px;
+	}
+	.baris-anggota {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		border: 1px solid #e1e9df;
+		border-radius: 8px;
+		background: #fbfdfb;
+		padding: 11px 13px;
+	}
+	.informasi-anggota {
+		display: grid;
+		min-width: 0;
+		gap: 4px;
+	}
+	.email-anggota {
+		margin: 0;
+		overflow: hidden;
+		color: #274a32;
+		font-size: 13px;
+		font-weight: 600;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.peran-anggota {
+		color: #718077;
+		font-size: 11px;
+		text-transform: capitalize;
+	}
+	.aksi-anggota {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		flex: 0 0 auto;
+	}
+	.tombol-hapus {
+		min-height: 30px;
+		padding: 5px 9px;
+		font-size: 11px;
+	}
+	.teks-status {
+		margin: 0;
+		color: #718077;
+		font-size: 13px;
+	}
+	.kisi-lahan {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+		gap: 11px;
+	}
+	.kartu-lahan {
+		border: 1px solid #d6e1d5;
+		border-radius: 8px;
+		background: #f9fbf8;
+		padding: 14px;
+	}
+	.kartu-lahan h3 {
+		margin: 0 0 12px;
+		color: #274a32;
+		font-size: 15px;
+		overflow-wrap: anywhere;
+	}
+	.kartu-lahan p {
+		display: flex;
+		justify-content: space-between;
+		gap: 10px;
+		margin: 7px 0 0;
+		color: #718077;
+		font-size: 11px;
+	}
+	.kartu-lahan p strong {
+		color: #385540;
+		font-weight: 700;
+	}
+	.kartu-lahan p span {
+		text-align: right;
+		overflow-wrap: anywhere;
+	}
+	.keadaan {
+		padding: 30px;
+	}
+	.kartu-memuat {
+		display: grid;
+		gap: 14px;
+		min-height: 150px;
+	}
+	.kartu-memuat span {
+		height: 14px;
+		border-radius: 4px;
+		background: #e8eee6;
+		animation: denyut 1.3s ease-in-out infinite alternate;
+	}
+	.kartu-memuat span:first-child {
+		width: 55%;
+		height: 23px;
+	}
+	.kartu-memuat span:last-child {
+		width: 80%;
+	}
+	.keadaan-galat {
+		display: grid;
+		justify-items: center;
+		gap: 14px;
+		text-align: center;
+	}
+	.keadaan-galat p {
+		margin: 0;
+		color: #a44242;
+		font-size: 14px;
+	}
+	.lapisan-dialog {
+		position: fixed;
+		inset: 0;
+		z-index: 9999;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		box-sizing: border-box;
+		background: #18312680;
+		backdrop-filter: blur(3px);
+		padding: 16px;
+	}
+	.kartu-dialog {
+		display: flex;
+		width: min(100%, 480px);
+		max-height: min(600px, 90vh);
+		flex-direction: column;
+		overflow: hidden;
+		border: 1px solid #d6e1d5;
+		border-radius: 10px;
+		background: #fff;
+		color: #183126;
+		box-shadow: 0 18px 50px #18312630;
+	}
+	.bilah-dialog, .kaki-halaman-dialog {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 15px 18px;
+	}
+	.bilah-dialog {
+		border-bottom: 1px solid #e8eee6;
+	}
+	.bilah-dialog h3 {
+		margin: 0;
+		color: #183126;
+		font-size: 16px;
+	}
+	.tombol-tutup {
+		border: 0;
+		background: transparent;
+		color: #718077;
+		padding: 3px 7px;
+		font-size: 18px;
+		cursor: pointer;
+	}
+	.tombol-tutup:hover {
+		color: #183126;
+	}
+	.isi-dialog {
+		overflow-y: auto;
+		padding: 16px 18px;
+	}
+	.keadaan-memuat, .keadaan-kosong {
+		padding: 22px 0;
+		color: #718077;
+		font-size: 13px;
+		text-align: center;
+	}
+	.daftar-menunggu {
+		display: grid;
+		gap: 8px;
+	}
+	.butir-menunggu {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		border: 1px solid #e1e9df;
+		border-radius: 8px;
+		background: #fbfdfb;
+		padding: 11px;
+	}
+	.id-anggota {
+		color: #718077;
+		font-size: 11px;
+	}
+	.tombol-aksi {
+		display: flex;
+		flex: 0 0 auto;
+		gap: 7px;
+	}
+	.setujui-tombol {
+		border-color: #39754b;
+		background: #39754b;
+		color: #fff;
+	}
+	.setujui-tombol:hover:not(:disabled) {
+		background: #2d603c;
+	}
+	.tolak-tombol {
+		border-color: #edc9c6;
+		background: #fff0ef;
+		color: #a44242;
+	}
+	.kaki-halaman-dialog {
+		justify-content: flex-end;
+		border-top: 1px solid #e8eee6;
+		background: #f9fbf8;
+	}
+	.tutup-tombol {
+		border-color: #d6e1d5;
+		background: #fff;
+		color: #385540;
+	}
+	.tutup-tombol:hover {
+		background: #f4f7f1;
+	}
+	@keyframes denyut {
+		to {
+			opacity: .55;
+		}
+	}
+	@media (max-width: 700px) {
+		.judul-rincian {
+			align-items: flex-start;
+			flex-direction: column;
+		}
+		.aksi-bilah {
+			justify-content: flex-start;
+		}
+		.judul-rincian > button, .aksi-bilah > button {
+			width: 100%;
+		}
+		.kisi-informasi {
+			grid-template-columns: 1fr;
+		}
+	}
+	@media (max-width: 560px) {
+		.kerangka-halaman {
+			padding: 28px 14px 54px;
+		}
+		.kartu-rincian {
+			gap: 20px;
+			padding: 20px 16px;
+		}
+		.keadaan {
+			padding: 22px 16px;
+		}
+		.baris-judul {
+			align-items: flex-start;
+			flex-direction: column;
+			gap: 8px;
+		}
+		.baris-anggota, .butir-menunggu {
+			align-items: flex-start;
+		}
+		.aksi-anggota {
+			flex-direction: column-reverse;
+			align-items: flex-end;
+		}
+		.kartu-lahan p {
+			align-items: flex-start;
+			flex-direction: column;
+			gap: 3px;
+		}
+		.kartu-lahan p span {
+			text-align: left;
+		}
+		.tombol-aksi {
+			flex-direction: column;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.kartu-memuat span {
+			animation: none;
+		}
+	}
 </style>

@@ -24,21 +24,86 @@
 
 <svelte:head><title>{notification?.title || 'Detail Notifikasi'} | Tani Siaga</title></svelte:head>
 
-<section class="detail-page">
-  {#if errorMessage}<p class="error">{errorMessage}</p>
-  {:else if !notification}<p class="state">Memuat detail...</p>
+<section class="halaman-rincian">
+  {#if errorMessage}<p class="galat">{errorMessage}</p>
+  {:else if !notification}<p class="keadaan">Memuat detail...</p>
   {:else}
-    <a class="back" href="/notifikasi">← Kembali ke notifikasi</a>
-    <article class={`detail-card ${notification.severity}`}>
-      <span class="eyebrow">{notification.type.replaceAll('_', ' ')}</span>
-      <h1>{notification.title}</h1>
-      <p class="message">{notification.message}</p>
-      {#if notification.targetUrl}<button class="target-button" onclick={openTarget}>Lihat halaman terkait ↗</button>{/if}
+    <a class="kembali" href="/notifikasi">← Kembali ke notifikasi</a>
+    <article class="kartu-rincian" data-tingkat-keparahan={notification.severity}>
+      <span class="label-kecil">{notification.type.replaceAll('_', ' ')}</span>
+      <h1 class="judul">{notification.title}</h1>
+      <p class="pesan">{notification.message}</p>
+      {#if notification.targetUrl}<button class="tombol-sasaran" onclick={openTarget}>Lihat halaman terkait ↗</button>{/if}
     </article>
   {/if}
 </section>
 
 <style>
-  .detail-page { width: min(100% - 40px, 820px); margin: 0 auto; padding: 70px 0 100px; color: #183126; }.back { color: #39754b; font-size: 13px; font-weight: 700; text-decoration: none; }.detail-card { margin-top: 24px; border: 1px solid #a9c9aa; border-left: 8px solid #6eaa78; border-radius: 10px; background: #fff; padding: 34px; }.detail-card.warning { border-left-color: #e3ad4e; }.detail-card.danger { border-left-color: #c9514b; }.eyebrow { color: #39754b; font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }.detail-card h1 { margin: 12px 0; font: 600 42px/1.05 'Fraunces', Georgia, serif; }.message { color: #52705a; font-size: 16px; line-height: 1.7; }.target-button { margin-top: 20px; border: 0; border-radius: 7px; background: #39754b; color: #fff; padding: 12px 16px; font-weight: 700; cursor: pointer; }.error { color: #c9514b; }
-  @media (max-width: 560px) { .detail-page { width: min(100% - 28px, 820px); padding-top: 40px; }.detail-card { padding: 24px; }.detail-card h1 { font-size: 34px; } }
+	.halaman-rincian {
+		width: min(100% - 40px, 820px);
+		margin: 0 auto;
+		padding: 70px 0 100px;
+		color: #183126;
+	}
+	.kembali {
+		color: #39754b;
+		font-size: 13px;
+		font-weight: 700;
+		text-decoration: none;
+	}
+	.kartu-rincian {
+		margin-top: 24px;
+		border: 1px solid #a9c9aa;
+		border-left: 8px solid #6eaa78;
+		border-radius: 10px;
+		background: #fff;
+		padding: 34px;
+	}
+	.kartu-rincian[data-tingkat-keparahan='warning'] {
+		border-left-color: #e3ad4e;
+	}
+	.kartu-rincian[data-tingkat-keparahan='danger'] {
+		border-left-color: #c9514b;
+	}
+	.label-kecil {
+		color: #39754b;
+		font-size: 11px;
+		font-weight: 800;
+		letter-spacing: .14em;
+		text-transform: uppercase;
+	}
+	.kartu-rincian h1 {
+		margin: 12px 0;
+		font: 600 42px/1.05 'Fraunces', Georgia, serif;
+	}
+	.pesan {
+		color: #52705a;
+		font-size: 16px;
+		line-height: 1.7;
+	}
+	.tombol-sasaran {
+		margin-top: 20px;
+		border: 0;
+		border-radius: 7px;
+		background: #39754b;
+		color: #fff;
+		padding: 12px 16px;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	.galat {
+		color: #c9514b;
+	}
+	@media (max-width: 560px) {
+		.halaman-rincian {
+			width: min(100% - 28px, 820px);
+			padding-top: 40px;
+		}
+		.kartu-rincian {
+			padding: 24px;
+		}
+		.kartu-rincian h1 {
+			font-size: 34px;
+		}
+	}
 </style>

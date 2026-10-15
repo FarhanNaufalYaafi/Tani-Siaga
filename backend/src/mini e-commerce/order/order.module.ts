@@ -7,10 +7,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserModule } from 'src/user/user.module';
 import { Product } from '../product/entities/product.entity';
 import { NotificationModule } from 'src/notification/notification.module';
+import { ProductReview } from '../product/entities/product-review.entity';
 
 @Module({
   imports:[
-    TypeOrmModule.forFeature([Order, BookedOrder, Product]),
+    TypeOrmModule.forFeature([Order, BookedOrder, Product, ProductReview]),
     UserModule,
     NotificationModule
   ],

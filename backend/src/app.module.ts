@@ -20,6 +20,7 @@ import { ShopModule } from './mini e-commerce/shop/shop.module';
 import { OrderModule } from './mini e-commerce/order/order.module';
 import { OrderItemsModule } from './mini e-commerce/order_items/order_items.module';
 import { ProductModule } from './mini e-commerce/product/product.module';
+import { MediaModule } from './media/media.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { ProductModule } from './mini e-commerce/product/product.module';
     ShopModule,
     OrderModule,
     OrderItemsModule,
+    MediaModule,
   ],
   controllers: [],
   providers: [],

@@ -60,20 +60,445 @@
 
 <svelte:head><title>Ubah Lahan Tani | Tani Siaga</title></svelte:head>
 
-<div class="page-shell"><div class="page-container">
-	<a class="back-link" href={farmlandId ? `/lahan-tani/${farmlandId}` : '/lahan-tani'}>← Kembali ke Detail Lahan</a>
-	<div class="page-heading"><p class="eyebrow">DATA LAHAN</p><h1>Ubah Lahan Tani</h1><p class="subtitle">Perbarui informasi lahan dan komoditasnya.</p></div>
-	{#if errorMessage}<div class="alert error">{errorMessage}</div>{/if}
-	{#if isLoading}<div class="state-box">Memuat data lahan...</div>{:else}<form class="form-card" onsubmit={handleSubmit}>
-		<div class="field-grid"><label>Nama lahan<input bind:value={form.name} required /></label><label>Luas area (m²)<input type="number" min="0.01" step="0.01" bind:value={form.area_size} required /></label><div class="location-field"><span class="field-label">Lokasi lahan</span><div class="location-grid"><select bind:value={selectedProvince} onchange={handleProvinceChange} required><option value="">Pilih provinsi</option>{#each provinces as item}<option value={item.code}>{item.name}</option>{/each}</select><select bind:value={selectedRegency} onchange={handleRegencyChange} disabled={!selectedProvince} required><option value="">Pilih kabupaten/kota</option>{#each regencies as item}<option value={item.code}>{item.name}</option>{/each}</select><select bind:value={selectedDistrict} onchange={handleDistrictChange} disabled={!selectedRegency} required><option value="">Pilih kecamatan</option>{#each districts as item}<option value={item.code}>{item.name}</option>{/each}</select><select bind:value={selectedVillage} onchange={handleVillageChange} disabled={!selectedDistrict} required><option value="">Pilih desa/kelurahan</option>{#each villages as item}<option value={item.code}>{item.name}</option>{/each}</select></div><small>ADM4 otomatis: {form.adm4_code || 'pilih desa/kelurahan'}</small></div><label>Metode tanam<input bind:value={form.plant_method} required /></label><label>Tanggal tanam<input type="date" bind:value={form.plant_date} /></label><label>Hasil panen estimasi (kg)<input type="number" min="0" step="0.01" bind:value={form.expected_yield_user_kg} /></label><label>Latitude<input type="number" step="any" bind:value={form.latitude} /></label><label>Longitude<input type="number" step="any" bind:value={form.longitude} /></label></div>
+<div class="kerangka-halaman"><div class="wadah-halaman">
+	<a class="tautan-kembali" href={farmlandId ? `/lahan-tani/${farmlandId}` : '/lahan-tani'}>← Kembali ke Detail Lahan</a>
+	<div class="judul-halaman"><p class="label-kecil">DATA LAHAN</p><h1 class="judul">Ubah Lahan Tani</h1><p class="subjudul">Perbarui informasi lahan dan komoditasnya.</p></div>
+	{#if errorMessage}<div class="peringatan galat">{errorMessage}</div>{/if}
+	{#if isLoading}<div class="kotak-keadaan">Memuat data lahan...</div>{:else}<form class="kartu-formulir" onsubmit={handleSubmit}>
+		<div class="kisi-bidang"><label>Nama lahan<input bind:value={form.name} required /></label><label>Luas area (m²)<input type="number" min="0.01" step="0.01" bind:value={form.area_size} required /></label><div class="bidang-lokasi"><span class="label-bidang">Lokasi lahan</span><div class="kisi-lokasi"><select bind:value={selectedProvince} onchange={handleProvinceChange} required><option value="">Pilih provinsi</option>{#each provinces as item}<option value={item.code}>{item.name}</option>{/each}</select><select bind:value={selectedRegency} onchange={handleRegencyChange} disabled={!selectedProvince} required><option value="">Pilih kabupaten/kota</option>{#each regencies as item}<option value={item.code}>{item.name}</option>{/each}</select><select bind:value={selectedDistrict} onchange={handleDistrictChange} disabled={!selectedRegency} required><option value="">Pilih kecamatan</option>{#each districts as item}<option value={item.code}>{item.name}</option>{/each}</select><select bind:value={selectedVillage} onchange={handleVillageChange} disabled={!selectedDistrict} required><option value="">Pilih desa/kelurahan</option>{#each villages as item}<option value={item.code}>{item.name}</option>{/each}</select></div><small>ADM4 otomatis: {form.adm4_code || 'pilih desa/kelurahan'}</small></div><label>Metode tanam<input bind:value={form.plant_method} required /></label><label>Tanggal tanam<input type="date" bind:value={form.plant_date} /></label><label>Hasil panen estimasi (kg)<input type="number" min="0" step="0.01" bind:value={form.expected_yield_user_kg} /></label><label>Latitude<input type="number" step="any" bind:value={form.latitude} /></label><label>Longitude<input type="number" step="any" bind:value={form.longitude} /></label></div>
 		<label>Alamat detail<textarea bind:value={form.address_detail} rows="3"></textarea></label>
-		<section class="commodity-section"><div class="section-heading"><div><p class="eyebrow">KATALOG</p><h2>Pilih Komoditas</h2></div><span class="selected">{form.commodity_id ? 'Komoditas dipilih' : 'Belum dipilih'}</span></div><input class="search" bind:value={search} oninput={() => (pageNumber = 1)} placeholder="Cari nama atau varietas komoditas..." /><div class="commodity-grid">{#each visibleCommodities as commodity (commodity.id)}<button type="button" class:selected={form.commodity_id === commodity.id} class="commodity-card" onclick={() => (form.commodity_id = commodity.id)}><strong>{commodity.name}</strong><span>{commodity.variety || 'Varietas umum'}</span></button>{/each}</div>{#if totalPages > 1}<div class="pagination"><button type="button" disabled={pageNumber === 1} onclick={() => (pageNumber -= 1)}>Sebelumnya</button><span>{pageNumber} / {totalPages}</span><button type="button" disabled={pageNumber === totalPages} onclick={() => (pageNumber += 1)}>Berikutnya</button></div>{/if}</section>
-		<section class="commodity-section"><div class="section-heading"><div><p class="eyebrow">KATALOG</p><h2>Pilih Komoditas</h2></div><span class="selected">{form.commodity_id ? 'Komoditas dipilih' : 'Belum dipilih'}</span></div><input class="search" bind:value={search} oninput={() => (pageNumber = 1)} placeholder="Cari nama atau varietas komoditas..." /><div class="commodity-grid">{#each visibleCommodities as commodity (commodity.id)}<button type="button" class:selected={form.commodity_id === commodity.id} class="commodity-card" onclick={() => (form.commodity_id = commodity.id)}><strong>{commodity.name}</strong><span>{commodity.variety || 'Varietas umum'}</span></button>{/each}</div>{#if totalPages > 1}<div class="pagination"><button type="button" disabled={pageNumber === 1} onclick={() => (pageNumber -= 1)}>Sebelumnya</button><span>{pageNumber} / {totalPages}</span><button type="button" disabled={pageNumber === totalPages} onclick={() => (pageNumber += 1)}>Berikutnya</button></div>{/if}{#if form.commodity_id}<div class="custom-preferences"><div><p class="eyebrow">PREFERENSI PETANI · OPSIONAL</p><h3>Sesuaikan parameter tanaman</h3><p class="muted">Bagian ini opsional. Kosongkan jika ingin memakai parameter bawaan komoditas untuk rekomendasi AI.</p></div><div class="preference-grid"><label>Suhu maksimum (°C) <span class="optional">Opsional</span><input type="number" step="0.1" bind:value={form.custom_max_temp_celsius} /></label><label>Suhu minimum (°C) <span class="optional">Opsional</span><input type="number" step="0.1" bind:value={form.custom_min_temp_celsius} /></label><label>Kelembapan maksimum (%) <span class="optional">Opsional</span><input type="number" min="0" max="100" step="0.1" bind:value={form.custom_max_humidity_percentage} /></label><label>Rata-rata hari panen <span class="optional">Opsional</span><input type="number" min="1" step="1" bind:value={form.custom_avg_harvest_days} /></label></div></div>{/if}</section>
-		<div class="form-actions"><a href={farmlandId ? `/lahan-tani/${farmlandId}` : '/lahan-tani'}>Batal</a><button class="primary" type="submit" disabled={isSaving}>{isSaving ? 'Menyimpan...' : 'Simpan Perubahan'}</button></div>
+		<section class="bagian-komoditas"><div class="judul-bagian"><div><p class="label-kecil">KATALOG</p><h2>Pilih Komoditas</h2></div><span class="terpilih">{form.commodity_id ? 'Komoditas dipilih' : 'Belum dipilih'}</span></div><input class="cari" bind:value={search} oninput={() => (pageNumber = 1)} placeholder="Cari nama atau varietas komoditas..." /><div class="kisi-komoditas">{#each visibleCommodities as commodity (commodity.id)}<button type="button" class:terpilih={form.commodity_id === commodity.id} class="kartu-komoditas" onclick={() => (form.commodity_id = commodity.id)}><strong>{commodity.name}</strong><span>{commodity.variety || 'Varietas umum'}</span></button>{/each}</div>{#if totalPages > 1}<div class="halaman"><button type="button" disabled={pageNumber === 1} onclick={() => (pageNumber -= 1)}>Sebelumnya</button><span>{pageNumber} / {totalPages}</span><button type="button" disabled={pageNumber === totalPages} onclick={() => (pageNumber += 1)}>Berikutnya</button></div>{/if}</section>
+		<section class="bagian-komoditas"><div class="judul-bagian"><div><p class="label-kecil">KATALOG</p><h2>Pilih Komoditas</h2></div><span class="terpilih">{form.commodity_id ? 'Komoditas dipilih' : 'Belum dipilih'}</span></div><input class="cari" bind:value={search} oninput={() => (pageNumber = 1)} placeholder="Cari nama atau varietas komoditas..." /><div class="kisi-komoditas">{#each visibleCommodities as commodity (commodity.id)}<button type="button" class:terpilih={form.commodity_id === commodity.id} class="kartu-komoditas" onclick={() => (form.commodity_id = commodity.id)}><strong>{commodity.name}</strong><span>{commodity.variety || 'Varietas umum'}</span></button>{/each}</div>{#if totalPages > 1}<div class="halaman"><button type="button" disabled={pageNumber === 1} onclick={() => (pageNumber -= 1)}>Sebelumnya</button><span>{pageNumber} / {totalPages}</span><button type="button" disabled={pageNumber === totalPages} onclick={() => (pageNumber += 1)}>Berikutnya</button></div>{/if}{#if form.commodity_id}<div class="preferensi-khusus"><div><p class="label-kecil">PREFERENSI PETANI · OPSIONAL</p><h3>Sesuaikan parameter tanaman</h3><p class="redup">Bagian ini opsional. Kosongkan jika ingin memakai parameter bawaan komoditas untuk rekomendasi AI.</p></div><div class="kisi-preferensi"><label>Suhu maksimum (°C) <span class="opsional">Opsional</span><input type="number" step="0.1" bind:value={form.custom_max_temp_celsius} /></label><label>Suhu minimum (°C) <span class="opsional">Opsional</span><input type="number" step="0.1" bind:value={form.custom_min_temp_celsius} /></label><label>Kelembapan maksimum (%) <span class="opsional">Opsional</span><input type="number" min="0" max="100" step="0.1" bind:value={form.custom_max_humidity_percentage} /></label><label>Rata-rata hari panen <span class="opsional">Opsional</span><input type="number" min="1" step="1" bind:value={form.custom_avg_harvest_days} /></label></div></div>{/if}</section>
+		<div class="aksi-formulir"><a href={farmlandId ? `/lahan-tani/${farmlandId}` : '/lahan-tani'}>Batal</a><button class="utama" type="submit" disabled={isSaving}>{isSaving ? 'Menyimpan...' : 'Simpan Perubahan'}</button></div>
 	</form>{/if}
 </div></div>
 
 <style>
-	.page-shell{min-height:100vh;background:#f4f7f1;color:#183126;padding:36px 20px 68px}.page-container{max-width:950px;margin:auto}.back-link{display:inline-block;margin-bottom:24px;color:#39754b;font-size:14px;font-weight:700;text-decoration:none}.page-heading{margin-bottom:28px}.eyebrow{margin:0 0 9px;color:#4e805a;font-size:12px;font-weight:800;letter-spacing:.14em}h1{margin:0;font-size:clamp(32px,5vw,46px)}.subtitle,.state-box{color:#718077;font-size:15px}.form-card,.state-box{border:1px solid #d6e1d5;border-radius:10px;background:#fff;padding:30px;box-shadow:0 8px 22px #23472e0f}.form-card{display:grid;gap:24px}label{display:grid;gap:8px;color:#385540;font-size:13px;font-weight:700}.field-label{display:block;color:#385540;font-size:13px;font-weight:700}input,textarea,.search,select{box-sizing:border-box;width:100%;border:1px solid #d6e1d5;border-radius:7px;background:#fbfdfb;color:#183126;padding:12px 13px;font:inherit;font-weight:400;outline:none}.field-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}.location-field{display:grid;gap:8px;grid-column:span 2}.location-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.location-field small{color:#718077;font-size:12px}.commodity-section{border-top:1px solid #e8eee6;padding-top:24px}.section-heading{display:flex;justify-content:space-between;align-items:end;margin-bottom:16px}h2{margin:0;font-size:21px}.selected{color:#39754b;font-size:13px;font-weight:700}.commodity-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-top:13px}.commodity-card{display:grid;gap:6px;text-align:left;border:1px solid #d6e1d5;border-radius:8px;background:#f9fbf8;padding:13px;color:#274a32;cursor:pointer}.commodity-card span{color:#718077;font-size:12px}.commodity-card.selected{border-color:#39754b;background:#eaf4e9}.pagination{display:flex;justify-content:center;align-items:center;gap:15px;margin-top:17px;color:#66766d;font-size:13px}.pagination button,.form-actions a{border:1px solid #d6e1d5;border-radius:7px;background:#fff;color:#39754b;padding:9px 12px;font-size:13px;text-decoration:none;cursor:pointer}.form-actions{display:flex;justify-content:flex-end;gap:11px;border-top:1px solid #e8eee6;padding-top:22px}.form-actions .primary{border:0;border-radius:7px;background:#39754b;color:#fff;padding:12px 18px;font-weight:700;cursor:pointer}.alert{border-radius:7px;padding:13px 15px;margin-bottom:17px;background:#fff0ef;color:#a44242;font-size:14px}@media(max-width:700px){.page-shell{padding:28px 14px 52px}.form-card{padding:22px}.field-grid{grid-template-columns:1fr}.location-field{grid-column:auto}.location-grid{grid-template-columns:1fr 1fr}.commodity-grid{grid-template-columns:repeat(2,1fr)}.section-heading{align-items:start;flex-direction:column;gap:12px}}
-	.page-shell{min-height:100vh;background:#f4f7f1;color:#183126;padding:36px 20px 68px}.page-container{max-width:950px;margin:auto}.back-link{display:inline-block;margin-bottom:24px;color:#39754b;font-size:14px;font-weight:700;text-decoration:none}.page-heading{margin-bottom:28px}.eyebrow{margin:0 0 9px;color:#4e805a;font-size:12px;font-weight:800;letter-spacing:.14em}h1{margin:0;font-size:clamp(32px,5vw,46px)}.subtitle,.state-box{color:#718077;font-size:15px}.form-card,.state-box{border:1px solid #d6e1d5;border-radius:10px;background:#fff;padding:30px;box-shadow:0 8px 22px #23472e0f}.form-card{display:grid;gap:24px}label{display:grid;gap:8px;color:#385540;font-size:13px;font-weight:700}.field-label{display:block;color:#385540;font-size:13px;font-weight:700}input,textarea,.search,select{box-sizing:border-box;width:100%;border:1px solid #d6e1d5;border-radius:7px;background:#fbfdfb;color:#183126;padding:12px 13px;font:inherit;font-weight:400;outline:none}.field-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}.location-field{display:grid;gap:8px;grid-column:span 2}.location-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.location-field small{color:#718077;font-size:12px}.commodity-section{border-top:1px solid #e8eee6;padding-top:24px}.section-heading{display:flex;justify-content:space-between;align-items:end;margin-bottom:16px}h2{margin:0;font-size:21px}.selected{color:#39754b;font-size:13px;font-weight:700}.commodity-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-top:13px}.commodity-card{display:grid;gap:6px;text-align:left;border:1px solid #d6e1d5;border-radius:8px;background:#f9fbf8;padding:13px;color:#274a32;cursor:pointer}.commodity-card span{color:#718077;font-size:12px}.commodity-card.selected{border-color:#39754b;background:#eaf4e9}.pagination{display:flex;justify-content:center;align-items:center;gap:15px;margin-top:17px;color:#66766d;font-size:13px}.pagination button,.form-actions a{border:1px solid #d6e1d5;border-radius:7px;background:#fff;color:#39754b;padding:9px 12px;font-size:13px;text-decoration:none;cursor:pointer}.form-actions{display:flex;justify-content:flex-end;gap:11px;border-top:1px solid #e8eee6;padding-top:22px}.form-actions .primary{border:0;border-radius:7px;background:#39754b;color:#fff;padding:12px 18px;font-weight:700;cursor:pointer}.custom-preferences{margin-top:22px;padding:20px;border:1px solid #cfe2cd;border-radius:9px;background:#f4faf2}.custom-preferences h3{margin:0;color:#274a32;font-size:18px}.preference-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:18px}.alert{border-radius:7px;padding:13px 15px;margin-bottom:17px;background:#fff0ef;color:#a44242;font-size:14px}@media(max-width:700px){.page-shell{padding:28px 14px 52px}.form-card{padding:22px}.field-grid{grid-template-columns:1fr}.location-field{grid-column:auto}.location-grid{grid-template-columns:1fr 1fr}.commodity-grid{grid-template-columns:repeat(2,1fr)}.preference-grid{grid-template-columns:1fr}.section-heading{align-items:start;flex-direction:column;gap:12px}}
+	.kerangka-halaman {
+		min-height: 100vh;
+		background: #f4f7f1;
+		color: #183126;
+		padding: 36px 20px 68px;
+	}
+	.wadah-halaman {
+		max-width: 950px;
+		margin: auto;
+	}
+	.tautan-kembali {
+		display: inline-block;
+		margin-bottom: 24px;
+		color: #39754b;
+		font-size: 14px;
+		font-weight: 700;
+		text-decoration: none;
+	}
+	.judul-halaman {
+		margin-bottom: 28px;
+	}
+	.label-kecil {
+		margin: 0 0 9px;
+		color: #4e805a;
+		font-size: 12px;
+		font-weight: 800;
+		letter-spacing: .14em;
+	}
+	h1 {
+		margin: 0;
+		font-size: clamp(32px,5vw,46px);
+	}
+	.subjudul,.kotak-keadaan {
+		color: #718077;
+		font-size: 15px;
+	}
+	.kartu-formulir,.kotak-keadaan {
+		border: 1px solid #d6e1d5;
+		border-radius: 10px;
+		background: #fff;
+		padding: 30px;
+		box-shadow: 0 8px 22px #23472e0f;
+	}
+	.kartu-formulir {
+		display: grid;
+		gap: 24px;
+	}
+	label {
+		display: grid;
+		gap: 8px;
+		color: #385540;
+		font-size: 13px;
+		font-weight: 700;
+	}
+	.label-bidang {
+		display: block;
+		color: #385540;
+		font-size: 13px;
+		font-weight: 700;
+	}
+	input,textarea,.cari,select {
+		box-sizing: border-box;
+		width: 100%;
+		border: 1px solid #d6e1d5;
+		border-radius: 7px;
+		background: #fbfdfb;
+		color: #183126;
+		padding: 12px 13px;
+		font: inherit;
+		font-weight: 400;
+		outline: none;
+	}
+	.kisi-bidang {
+		display: grid;
+		grid-template-columns: repeat(2,1fr);
+		gap: 18px;
+	}
+	.bidang-lokasi {
+		display: grid;
+		gap: 8px;
+		grid-column: span 2;
+	}
+	.kisi-lokasi {
+		display: grid;
+		grid-template-columns: repeat(4,1fr);
+		gap: 10px;
+	}
+	.bidang-lokasi small {
+		color: #718077;
+		font-size: 12px;
+	}
+	.bagian-komoditas {
+		border-top: 1px solid #e8eee6;
+		padding-top: 24px;
+	}
+	.judul-bagian {
+		display: flex;
+		justify-content: space-between;
+		align-items: end;
+		margin-bottom: 16px;
+	}
+	h2 {
+		margin: 0;
+		font-size: 21px;
+	}
+	.terpilih {
+		color: #39754b;
+		font-size: 13px;
+		font-weight: 700;
+	}
+	.kisi-komoditas {
+		display: grid;
+		grid-template-columns: repeat(4,1fr);
+		gap: 11px;
+		margin-top: 13px;
+	}
+	.kartu-komoditas {
+		display: grid;
+		gap: 6px;
+		text-align: left;
+		border: 1px solid #d6e1d5;
+		border-radius: 8px;
+		background: #f9fbf8;
+		padding: 13px;
+		color: #274a32;
+		cursor: pointer;
+	}
+	.kartu-komoditas span {
+		color: #718077;
+		font-size: 12px;
+	}
+	.kartu-komoditas.terpilih {
+		border-color: #39754b;
+		background: #eaf4e9;
+	}
+	.halaman {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		gap: 15px;
+		margin-top: 17px;
+		color: #66766d;
+		font-size: 13px;
+	}
+	.halaman button,.aksi-formulir a {
+		border: 1px solid #d6e1d5;
+		border-radius: 7px;
+		background: #fff;
+		color: #39754b;
+		padding: 9px 12px;
+		font-size: 13px;
+		text-decoration: none;
+		cursor: pointer;
+	}
+	.aksi-formulir {
+		display: flex;
+		justify-content: flex-end;
+		gap: 11px;
+		border-top: 1px solid #e8eee6;
+		padding-top: 22px;
+	}
+	.aksi-formulir .utama {
+		border: 0;
+		border-radius: 7px;
+		background: #39754b;
+		color: #fff;
+		padding: 12px 18px;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	.peringatan {
+		border-radius: 7px;
+		padding: 13px 15px;
+		margin-bottom: 17px;
+		background: #fff0ef;
+		color: #a44242;
+		font-size: 14px;
+	}
+	@media (max-width:700px) {
+		.kerangka-halaman {
+			padding: 28px 14px 52px;
+		}
+		.kartu-formulir {
+			padding: 22px;
+		}
+		.kisi-bidang {
+			grid-template-columns: 1fr;
+		}
+		.bidang-lokasi {
+			grid-column: auto;
+		}
+		.kisi-lokasi {
+			grid-template-columns: 1fr 1fr;
+		}
+		.kisi-komoditas {
+			grid-template-columns: repeat(2,1fr);
+		}
+		.judul-bagian {
+			align-items: start;
+			flex-direction: column;
+			gap: 12px;
+		}
+	}
+	.kerangka-halaman {
+		min-height: 100vh;
+		background: #f4f7f1;
+		color: #183126;
+		padding: 36px 20px 68px;
+	}
+	.wadah-halaman {
+		max-width: 950px;
+		margin: auto;
+	}
+	.tautan-kembali {
+		display: inline-block;
+		margin-bottom: 24px;
+		color: #39754b;
+		font-size: 14px;
+		font-weight: 700;
+		text-decoration: none;
+	}
+	.judul-halaman {
+		margin-bottom: 28px;
+	}
+	.label-kecil {
+		margin: 0 0 9px;
+		color: #4e805a;
+		font-size: 12px;
+		font-weight: 800;
+		letter-spacing: .14em;
+	}
+	h1 {
+		margin: 0;
+		font-size: clamp(32px,5vw,46px);
+	}
+	.subjudul,.kotak-keadaan {
+		color: #718077;
+		font-size: 15px;
+	}
+	.kartu-formulir,.kotak-keadaan {
+		border: 1px solid #d6e1d5;
+		border-radius: 10px;
+		background: #fff;
+		padding: 30px;
+		box-shadow: 0 8px 22px #23472e0f;
+	}
+	.kartu-formulir {
+		display: grid;
+		gap: 24px;
+	}
+	label {
+		display: grid;
+		gap: 8px;
+		color: #385540;
+		font-size: 13px;
+		font-weight: 700;
+	}
+	.label-bidang {
+		display: block;
+		color: #385540;
+		font-size: 13px;
+		font-weight: 700;
+	}
+	input,textarea,.cari,select {
+		box-sizing: border-box;
+		width: 100%;
+		border: 1px solid #d6e1d5;
+		border-radius: 7px;
+		background: #fbfdfb;
+		color: #183126;
+		padding: 12px 13px;
+		font: inherit;
+		font-weight: 400;
+		outline: none;
+	}
+	.kisi-bidang {
+		display: grid;
+		grid-template-columns: repeat(2,1fr);
+		gap: 18px;
+	}
+	.bidang-lokasi {
+		display: grid;
+		gap: 8px;
+		grid-column: span 2;
+	}
+	.kisi-lokasi {
+		display: grid;
+		grid-template-columns: repeat(4,1fr);
+		gap: 10px;
+	}
+	.bidang-lokasi small {
+		color: #718077;
+		font-size: 12px;
+	}
+	.bagian-komoditas {
+		border-top: 1px solid #e8eee6;
+		padding-top: 24px;
+	}
+	.judul-bagian {
+		display: flex;
+		justify-content: space-between;
+		align-items: end;
+		margin-bottom: 16px;
+	}
+	h2 {
+		margin: 0;
+		font-size: 21px;
+	}
+	.terpilih {
+		color: #39754b;
+		font-size: 13px;
+		font-weight: 700;
+	}
+	.kisi-komoditas {
+		display: grid;
+		grid-template-columns: repeat(4,1fr);
+		gap: 11px;
+		margin-top: 13px;
+	}
+	.kartu-komoditas {
+		display: grid;
+		gap: 6px;
+		text-align: left;
+		border: 1px solid #d6e1d5;
+		border-radius: 8px;
+		background: #f9fbf8;
+		padding: 13px;
+		color: #274a32;
+		cursor: pointer;
+	}
+	.kartu-komoditas span {
+		color: #718077;
+		font-size: 12px;
+	}
+	.kartu-komoditas.terpilih {
+		border-color: #39754b;
+		background: #eaf4e9;
+	}
+	.halaman {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		gap: 15px;
+		margin-top: 17px;
+		color: #66766d;
+		font-size: 13px;
+	}
+	.halaman button,.aksi-formulir a {
+		border: 1px solid #d6e1d5;
+		border-radius: 7px;
+		background: #fff;
+		color: #39754b;
+		padding: 9px 12px;
+		font-size: 13px;
+		text-decoration: none;
+		cursor: pointer;
+	}
+	.aksi-formulir {
+		display: flex;
+		justify-content: flex-end;
+		gap: 11px;
+		border-top: 1px solid #e8eee6;
+		padding-top: 22px;
+	}
+	.aksi-formulir .utama {
+		border: 0;
+		border-radius: 7px;
+		background: #39754b;
+		color: #fff;
+		padding: 12px 18px;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	.preferensi-khusus {
+		margin-top: 22px;
+		padding: 20px;
+		border: 1px solid #cfe2cd;
+		border-radius: 9px;
+		background: #f4faf2;
+	}
+	.preferensi-khusus h3 {
+		margin: 0;
+		color: #274a32;
+		font-size: 18px;
+	}
+	.kisi-preferensi {
+		display: grid;
+		grid-template-columns: repeat(2,1fr);
+		gap: 16px;
+		margin-top: 18px;
+	}
+	.peringatan {
+		border-radius: 7px;
+		padding: 13px 15px;
+		margin-bottom: 17px;
+		background: #fff0ef;
+		color: #a44242;
+		font-size: 14px;
+	}
+	@media (max-width:700px) {
+		.kerangka-halaman {
+			padding: 28px 14px 52px;
+		}
+		.kartu-formulir {
+			padding: 22px;
+		}
+		.kisi-bidang {
+			grid-template-columns: 1fr;
+		}
+		.bidang-lokasi {
+			grid-column: auto;
+		}
+		.kisi-lokasi {
+			grid-template-columns: 1fr 1fr;
+		}
+		.kisi-komoditas {
+			grid-template-columns: repeat(2,1fr);
+		}
+		.kisi-preferensi {
+			grid-template-columns: 1fr;
+		}
+		.judul-bagian {
+			align-items: start;
+			flex-direction: column;
+			gap: 12px;
+		}
+	}
 </style>

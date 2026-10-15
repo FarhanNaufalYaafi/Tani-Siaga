@@ -28,7 +28,9 @@ export class FarmlandsService {
 
         const leader = user;
         const isGroupLeader = leader.role === userRoles.GROUP_LEADER && !!leader.farmer_group_id;
-        const isIndividualFarmer = leader.role === userRoles.INDIVIDUAL_FARMER && !leader.farmer_group_id;
+        const isIndividualFarmer =
+            (leader.role === userRoles.INDIVIDUAL_FARMER || leader.role === userRoles.FARMER) &&
+            !leader.farmer_group_id;
         const isNewIndividualFarmer = leader.role === userRoles.USER && !leader.farmer_group_id;
 
         if (!isGroupLeader && !isIndividualFarmer && !isNewIndividualFarmer) {

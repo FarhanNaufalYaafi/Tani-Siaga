@@ -120,48 +120,53 @@
   function formatDate(value: string) {
     return new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
   }
+
+  function notificationSeverity(notification: AppNotification) {
+    if (notification.type === 'shop_approval' && notification.title === 'Toko dibubarkan admin') return 'danger';
+    return notification.severity;
+  }
 </script>
 
 <svelte:head><title>Notifikasi | Tani Siaga</title></svelte:head>
 
-<section class="notification-page">
-  <div class="page-heading">
-    <span class="eyebrow">Pusat informasi</span>
-    <h1>Notifikasi</h1>
+<section class="halaman-notifikasi">
+  <div class="judul-halaman">
+    <span class="label-kecil">Pusat informasi</span>
+    <h1 class="judul">Notifikasi</h1>
     <p>Ringkasan kabar penting tentang lahan, pasar, kelompok tani, dan pesananmu.</p>
   </div>
 
-  {#if isLoading}<p class="state">Memuat notifikasi...</p>
-  {:else if errorMessage}<div class="state error"><p>{errorMessage}</p><button class="action-button" type="button" onclick={() => void loadNotifications()}>Coba lagi</button></div>
+  {#if isLoading}<p class="keadaan">Memuat notifikasi...</p>
+  {:else if errorMessage}<div class="keadaan galat"><p>{errorMessage}</p><button class="tombol-aksi" type="button" onclick={() => void loadNotifications()}>Coba lagi</button></div>
   {:else}
-    {#if notice}<p class="feedback success" role="status">{notice}</p>{/if}
-    {#if actionError}<p class="feedback error" role="alert">{actionError}</p>{/if}
-    {#if notifications.length === 0}<p class="state">Belum ada notifikasi.</p>
+    {#if notice}<p class="masukan berhasil" role="status">{notice}</p>{/if}
+    {#if actionError}<p class="masukan galat" role="alert">{actionError}</p>{/if}
+    {#if notifications.length === 0}<p class="keadaan">Belum ada notifikasi.</p>
     {:else}
-      <div class="notification-toolbar">
+      <div class="bilah-notifikasi">
         <p>{notifications.length} notifikasi · {unreadCount} belum dibaca</p>
-        <div class="bulk-actions">
-          <button class="action-button" type="button" onclick={markAllRead} disabled={unreadCount === 0 || isMarkingAllRead || isDeletingAll || pendingNotificationId !== null}>{isMarkingAllRead ? 'Menandai...' : 'Tandai semua dibaca'}</button>
-          <button class="action-button danger" type="button" onclick={removeAllNotifications} disabled={isMarkingAllRead || isDeletingAll || pendingNotificationId !== null}>{isDeletingAll ? 'Menghapus...' : 'Hapus semua'}</button>
+        <div class="aksi-massal">
+          <button class="tombol-aksi" type="button" onclick={markAllRead} disabled={unreadCount === 0 || isMarkingAllRead || isDeletingAll || pendingNotificationId !== null}>{isMarkingAllRead ? 'Menandai...' : 'Tandai semua dibaca'}</button>
+          <button class="tombol-aksi bahaya" type="button" onclick={removeAllNotifications} disabled={isMarkingAllRead || isDeletingAll || pendingNotificationId !== null}>{isDeletingAll ? 'Menghapus...' : 'Hapus semua'}</button>
         </div>
       </div>
-      <div class="notification-list">
+      <div class="daftar-notifikasi">
         {#each notifications as notification (notification.id)}
-          <article class:unread={!notification.isRead} class="notification-card">
-            <span class={`severity ${notification.severity}`}></span>
-            <div class="notification-copy">
-              <a class="notification-open" href={`/notifikasi/${notification.id}`}>
-                <div class="notification-meta"><span>{notification.type.replaceAll('_', ' ')}</span><time>{formatDate(notification.createdAt)}</time></div>
+          <article class:belum={!notification.isRead} class="kartu-notifikasi">
+            <span class="tingkat-keparahan" data-tingkat-keparahan={notificationSeverity(notification)}></span>
+            <div class="teks-notifikasi">
+              <a class="buka-notifikasi" href={`/notifikasi/${notification.id}`}>
+                <div class="informasi-notifikasi"><span>{notification.type.replaceAll('_', ' ')}</span><time>{formatDate(notification.createdAt)}</time></div>
                 <h2>{notification.title}</h2>
                 <p>{notification.message}</p>
               </a>
-              <div class="notification-actions">
-                {#if notification.isRead}<span class="read-status">Sudah dibaca</span>
-                {:else}<button class="action-button" type="button" onclick={() => markRead(notification)} disabled={pendingNotificationId === notification.id || isMarkingAllRead || isDeletingAll}>{pendingNotificationId === notification.id && pendingNotificationAction === 'read' ? 'Menandai...' : 'Tandai dibaca'}</button>{/if}
-                <button class="action-button danger" type="button" onclick={() => removeNotification(notification)} disabled={pendingNotificationId === notification.id || isMarkingAllRead || isDeletingAll}>{pendingNotificationId === notification.id && pendingNotificationAction === 'delete' ? 'Menghapus...' : 'Hapus'}</button>
+              <div class="aksi-notifikasi">
+                {#if notification.isRead}<span class="status-baca">Sudah dibaca</span>
+                {:else}<button class="tombol-aksi" type="button" onclick={() => markRead(notification)} disabled={pendingNotificationId === notification.id || isMarkingAllRead || isDeletingAll}>{pendingNotificationId === notification.id && pendingNotificationAction === 'read' ? 'Menandai...' : 'Tandai dibaca'}</button>{/if}
+                <button class="tombol-aksi bahaya" type="button" onclick={() => removeNotification(notification)} disabled={pendingNotificationId === notification.id || isMarkingAllRead || isDeletingAll}>{pendingNotificationId === notification.id && pendingNotificationAction === 'delete' ? 'Menghapus...' : 'Hapus'}</button>
               </div>
             </div>
-            <a class="arrow" aria-label={`Buka notifikasi: ${notification.title}`} href={`/notifikasi/${notification.id}`}>↗</a>
+            <a class="panah" aria-label={`Buka notifikasi: ${notification.title}`} href={`/notifikasi/${notification.id}`}>↗</a>
           </article>
         {/each}
       </div>
@@ -170,24 +175,227 @@
 </section>
 
 <style>
-  .notification-page { width: min(100% - 40px, 940px); margin: 0 auto; padding: 70px 0 100px; color: #183126; }
-  .page-heading { margin-bottom: 28px; }
-  .eyebrow { color: #39754b; font-size: 11px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
-  h1 { margin: 10px 0 8px; font: 600 clamp(40px, 6vw, 64px)/1 'Fraunces', Georgia, serif; }
-  .page-heading p, .state { color: #718077; line-height: 1.6; }
-  .notification-list { display: grid; gap: 12px; }
-  .notification-card { display: grid; grid-template-columns: 9px 1fr auto; gap: 16px; align-items: center; border: 1px solid #cbd6cc; border-radius: 10px; background: #e8eee8; padding: 18px 20px; color: #52635a; text-decoration: none; transition: transform .2s, box-shadow .2s, background-color .2s, border-color .2s; }
-  .notification-card:hover { transform: translateY(-2px); box-shadow: 0 10px 25px #23472e12; }
-  .notification-card.unread { border-color: #8ab58d; background: #fff; color: #183126; box-shadow: 0 4px 14px #23472e0c; }
-  .notification-card.unread h2 { color: #183126; font-weight: 800; }
-  .notification-card:not(.unread) h2 { color: #52635a; font-weight: 600; }
-  .severity { width: 8px; height: 52px; border-radius: 99px; background: #6eaa78; }
-  .severity.warning { background: #e3ad4e; }.severity.danger { background: #c9514b; }
-  .notification-meta { display: flex; justify-content: space-between; gap: 12px; color: #65746a; font-size: 11px; text-transform: capitalize; }.notification-meta time { text-transform: none; }
-  .notification-card.unread .notification-meta { color: #5d6d61; }
-  h2 { margin: 7px 0 4px; font-size: 17px; }.notification-copy p { margin: 0; color: #65746a; font-size: 13px; line-height: 1.45; }.notification-card.unread .notification-copy p { color: #4f6255; }.arrow { color: #39754b; font-size: 22px; }
-  .notification-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 16px; color: #65746a; font-size: 13px; }.notification-toolbar p { margin: 0; }.bulk-actions, .notification-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }.notification-actions { margin-top: 14px; }
-  .action-button { min-height: 36px; border: 1px solid #39754b; border-radius: 7px; background: #39754b; color: #fff; padding: 8px 11px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; transition: background-color .18s, border-color .18s, opacity .18s; }.action-button:hover:not(:disabled) { border-color: #2d603c; background: #2d603c; }.action-button.danger { border-color: #e3c5c2; background: #fff; color: #a44242; }.action-button.danger:hover:not(:disabled) { border-color: #c9514b; background: #fff0ef; }.action-button:focus-visible { outline: 3px solid #5c95684d; outline-offset: 2px; }.action-button:disabled { cursor: not-allowed; opacity: .55; }
-  .notification-open { display: block; color: inherit; text-decoration: none; }.notification-open:hover h2 { color: #39754b; }.notification-actions .read-status { color: #718077; font-size: 12px; }.feedback { margin: 0 0 14px; padding: 11px 13px; border-radius: 7px; font-size: 13px; }.feedback.success { background: #edf8ed; color: #39754b; }.feedback.error, .state.error { color: #c9514b; }.state.error p { margin: 0 0 10px; }
-  @media (max-width: 560px) { .notification-page { width: min(100% - 28px, 940px); padding-top: 40px; }.page-header { align-items: flex-start; flex-direction: column; }.notification-toolbar { align-items: stretch; flex-direction: column; }.bulk-actions { display: grid; grid-template-columns: 1fr 1fr; }.bulk-actions .action-button { padding-inline: 8px; }.notification-card { grid-template-columns: 7px 1fr; align-items: start; }.arrow { display: none; }.notification-meta { display: block; }.notification-meta time { display: block; margin-top: 4px; }.notification-actions { margin-top: 12px; } }
+	.halaman-notifikasi {
+		width: min(100% - 40px, 940px);
+		margin: 0 auto;
+		padding: 70px 0 100px;
+		color: #183126;
+	}
+	.judul-halaman {
+		margin-bottom: 28px;
+	}
+	.label-kecil {
+		color: #39754b;
+		font-size: 11px;
+		font-weight: 800;
+		letter-spacing: .15em;
+		text-transform: uppercase;
+	}
+	h1 {
+		margin: 10px 0 8px;
+		font: 600 clamp(40px, 6vw, 64px)/1 'Fraunces', Georgia, serif;
+	}
+	.judul-halaman p, .keadaan {
+		color: #718077;
+		line-height: 1.6;
+	}
+	.daftar-notifikasi {
+		display: grid;
+		gap: 12px;
+	}
+	.kartu-notifikasi {
+		display: grid;
+		grid-template-columns: 9px 1fr auto;
+		gap: 16px;
+		align-items: center;
+		border: 1px solid #cbd6cc;
+		border-radius: 10px;
+		background: #e8eee8;
+		padding: 18px 20px;
+		color: #52635a;
+		text-decoration: none;
+		transition: transform .2s, box-shadow .2s, background-color .2s, border-color .2s;
+	}
+	.kartu-notifikasi:hover {
+		transform: translateY(-2px);
+		box-shadow: 0 10px 25px #23472e12;
+	}
+	.kartu-notifikasi.belum {
+		border-color: #8ab58d;
+		background: #fff;
+		color: #183126;
+		box-shadow: 0 4px 14px #23472e0c;
+	}
+	.kartu-notifikasi.belum h2 {
+		color: #183126;
+		font-weight: 800;
+	}
+	.kartu-notifikasi:not(.belum) h2 {
+		color: #52635a;
+		font-weight: 600;
+	}
+	.tingkat-keparahan {
+		width: 8px;
+		height: 52px;
+		border-radius: 99px;
+		background: #6eaa78;
+	}
+	.tingkat-keparahan[data-tingkat-keparahan='warning'] {
+		background: #e3ad4e;
+	}
+	.tingkat-keparahan[data-tingkat-keparahan='danger'] {
+		background: #c9514b;
+	}
+	.informasi-notifikasi {
+		display: flex;
+		justify-content: space-between;
+		gap: 12px;
+		color: #65746a;
+		font-size: 11px;
+		text-transform: capitalize;
+	}
+	.informasi-notifikasi time {
+		text-transform: none;
+	}
+	.kartu-notifikasi.belum .informasi-notifikasi {
+		color: #5d6d61;
+	}
+	h2 {
+		margin: 7px 0 4px;
+		font-size: 17px;
+	}
+	.teks-notifikasi p {
+		margin: 0;
+		color: #65746a;
+		font-size: 13px;
+		line-height: 1.45;
+	}
+	.kartu-notifikasi.belum .teks-notifikasi p {
+		color: #4f6255;
+	}
+	.panah {
+		color: #39754b;
+		font-size: 22px;
+	}
+	.bilah-notifikasi {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 16px;
+		margin-bottom: 16px;
+		color: #65746a;
+		font-size: 13px;
+	}
+	.bilah-notifikasi p {
+		margin: 0;
+	}
+	.aksi-massal, .aksi-notifikasi {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 8px;
+	}
+	.aksi-notifikasi {
+		margin-top: 14px;
+	}
+	.tombol-aksi {
+		min-height: 36px;
+		border: 1px solid #39754b;
+		border-radius: 7px;
+		background: #39754b;
+		color: #fff;
+		padding: 8px 11px;
+		font: inherit;
+		font-size: 12px;
+		font-weight: 700;
+		cursor: pointer;
+		transition: background-color .18s, border-color .18s, opacity .18s;
+	}
+	.tombol-aksi:hover:not(:disabled) {
+		border-color: #2d603c;
+		background: #2d603c;
+	}
+	.tombol-aksi.bahaya {
+		border-color: #e3c5c2;
+		background: #fff;
+		color: #a44242;
+	}
+	.tombol-aksi.bahaya:hover:not(:disabled) {
+		border-color: #c9514b;
+		background: #fff0ef;
+	}
+	.tombol-aksi:focus-visible {
+		outline: 3px solid #5c95684d;
+		outline-offset: 2px;
+	}
+	.tombol-aksi:disabled {
+		cursor: not-allowed;
+		opacity: .55;
+	}
+	.buka-notifikasi {
+		display: block;
+		color: inherit;
+		text-decoration: none;
+	}
+	.buka-notifikasi:hover h2 {
+		color: #39754b;
+	}
+	.aksi-notifikasi .status-baca {
+		color: #718077;
+		font-size: 12px;
+	}
+	.masukan {
+		margin: 0 0 14px;
+		padding: 11px 13px;
+		border-radius: 7px;
+		font-size: 13px;
+	}
+	.masukan.berhasil {
+		background: #edf8ed;
+		color: #39754b;
+	}
+	.masukan.galat, .keadaan.galat {
+		color: #c9514b;
+	}
+	.keadaan.galat p {
+		margin: 0 0 10px;
+	}
+	@media (max-width: 560px) {
+		.halaman-notifikasi {
+			width: min(100% - 28px, 940px);
+			padding-top: 40px;
+		}
+		.bilah-notifikasi {
+			align-items: flex-start;
+			flex-direction: column;
+		}
+		.bilah-notifikasi {
+			align-items: stretch;
+			flex-direction: column;
+		}
+		.aksi-massal {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+		}
+		.aksi-massal .tombol-aksi {
+			padding-inline: 8px;
+		}
+		.kartu-notifikasi {
+			grid-template-columns: 7px 1fr;
+			align-items: start;
+		}
+		.panah {
+			display: none;
+		}
+		.informasi-notifikasi {
+			display: block;
+		}
+		.informasi-notifikasi time {
+			display: block;
+			margin-top: 4px;
+		}
+		.aksi-notifikasi {
+			margin-top: 12px;
+		}
+	}
 </style>

@@ -285,6 +285,7 @@ export class AuthService {
             id: user.id,
             userId: user.id,
             email: user.email,
+            profile_image_url: user.profile_image_url,
             role: user.role,
             farmer_group_id: user.farmer_group_id,
             group_status: user.group_status,

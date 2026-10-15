@@ -6,6 +6,7 @@
 	import Modal from '$lib/components/Modal.svelte';
 	import '../app.css';
 	import { getCurrentUser, type CurrentUserDto } from '$lib/api/auth-api';
+	import { applyAccountTheme, applyStoredAccountTheme } from '$lib/services/theme';
 	import { showAlert } from '$lib/services/dialog';
 	import { getNotifications } from '$lib/api/notification-api';
 	import { disablePushNotifications, enablePushNotifications, getNotificationPermission, syncPushToken } from '$lib/services/notificationService';
@@ -14,6 +15,7 @@
 	let isAuthRoute = $derived(['/signin', '/signup', '/forgot-password'].includes($page.url.pathname));
 
 	let currentUser = $state<CurrentUserDto | null>(null);
+	if (browser) applyStoredAccountTheme();
 	let authRedirectStarted = false;
 	type NotificationState = NotificationPermission | 'unsupported' | 'off' | 'loading' | 'error';
 	let notificationState = $state<NotificationState>('default');
@@ -21,7 +23,7 @@
 	let doNotRemind = $state(false);
 	let promptedUserKey = '';
 	let unreadNotificationCount = $state(0);
-	let navLinks = [
+	const baseNavLinks = [
 		{ href: '/dashboard', label: 'Dashboard' },
 		{ href: '/ai-recommendations', label: 'Rekomendasi AI' },
 		{ href: '/market-analysis', label: 'Analisis Pasar' },
@@ -32,6 +34,7 @@
 		{ href: '/toko', label: 'Toko' },
 		{ href: '/tentang-kami', label: 'Tentang Kami' },
 	];
+	let navLinks = $derived(currentUser?.role === 'admin' ? [...baseNavLinks, { href: '/admin', label: 'Admin' }] : baseNavLinks);
 
 	let headerHidden = $state(false);
 	let headerFading = $state(false);
@@ -64,6 +67,7 @@
 	async function loadCurrentUser(pathname = $page.url.pathname) {
 		try {
 			currentUser = await getCurrentUser();
+			applyAccountTheme(currentUser);
 			if (['/signin', '/signup', '/forgot-password'].includes(pathname) && $page.url.pathname === pathname) {
 				if (!authRedirectStarted) {
 					authRedirectStarted = true;
@@ -81,6 +85,7 @@
 		} catch {
 			authRedirectStarted = false;
 			currentUser = null;
+			applyStoredAccountTheme();
 			unreadNotificationCount = 0;
 			notificationPromptOpen = false;
 			promptedUserKey = '';
@@ -238,74 +243,74 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 </svelte:head>
 
-<div class="app-shell">
+<div class="kerangka-aplikasi">
 	{#if !isAuthRoute}
-	<header class="app-header" class:hidden={headerHidden} class:fading={headerFading} use:horizontalWheelScroll>
-		<div class="header-inner">
-			<a class="brand" href="/dashboard" aria-label="Tani Siaga Dashboard">
-				<img class="brand-mark" src="/tani-siaga-logo.svg" alt="" />
-				<span class="brand-text">Tani Siaga</span>
+	<header class="bilah-aplikasi" class:tersembunyi={headerHidden} class:memudar={headerFading} use:horizontalWheelScroll>
+		<div class="dalam-bilah">
+			<a class="merek" href="/dashboard" aria-label="Tani Siaga Dashboard">
+				<img class="penanda-merek" src="/tani-siaga-logo.svg" alt="" />
+				<span class="teks-merek">Tani Siaga</span>
 			</a>
-			<button class="nav-toggle" type="button" aria-label={mobileNavOpen ? 'Tutup navigasi' : 'Buka navigasi'} aria-expanded={mobileNavOpen} aria-controls="primary-navigation" onclick={() => (mobileNavOpen = !mobileNavOpen)}>
+			<button class="alih-navigasi" type="button" aria-label={mobileNavOpen ? 'Tutup navigasi' : 'Buka navigasi'} aria-expanded={mobileNavOpen} aria-controls="primary-navigation" onclick={() => (mobileNavOpen = !mobileNavOpen)}>
 				<span aria-hidden="true">{mobileNavOpen ? '×' : '☰'}</span>
 			</button>
-			<nav id="primary-navigation" class="main-nav" class:open={mobileNavOpen} aria-label="Navigasi utama">
+			<nav id="navigasi-utama" class="navigasi-utama" class:buka={mobileNavOpen} aria-label="Navigasi utama">
 				{#each navLinks as link}
-					<a href={link.href} class:active={isActive(link.href)} onclick={() => (mobileNavOpen = false)}>{link.label}</a>
+					<a href={link.href} class:aktif={isActive(link.href)} onclick={() => (mobileNavOpen = false)}>{link.label}</a>
 				{/each}
 			</nav>
-			<div class="header-actions">
+			<div class="aksi-bilah">
 				{#if currentUser}
-					<a class="notification-link" href="/notifikasi" aria-label={`Notifikasi${unreadNotificationCount ? `, ${unreadNotificationCount} belum dibaca` : ''}`}>
-						<span class="bell" aria-hidden="true">🔔</span>
-						{#if unreadNotificationCount > 0}<span class="notification-badge">{unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}</span>{/if}
+					<a class="tautan-notifikasi" href="/notifikasi" aria-label={`Notifikasi${unreadNotificationCount ? `, ${unreadNotificationCount} belum dibaca` : ''}`}>
+						<span class="lonceng" aria-hidden="true">🔔</span>
+						{#if unreadNotificationCount > 0}<span class="lencana-notifikasi">{unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}</span>{/if}
 					</a>
 					<button
-						class="notification-toggle"
-						class:on={notificationState === 'granted'}
+						class="alih-notifikasi"
+						class:aktif={notificationState === 'granted'}
 						role="switch"
 						aria-checked={notificationState === 'granted'}
 						aria-label={notificationState === 'granted' ? 'Matikan notifikasi' : 'Nyalakan notifikasi'}
 						onclick={toggleNotifications}
 						disabled={notificationState === 'loading'}
 					>
-						<span class="toggle-label">Notifikasi</span>
-						<span class="toggle-track"><span class="toggle-thumb"></span></span>
+						<span class="label-alih">Notifikasi</span>
+						<span class="jalur-alih"><span class="penggeser-alih"></span></span>
 					</button>
-					<a class="profile-link" href="/profil">
-						<span class="avatar">{initials}</span>
+					<a class="tautan-profil" href="/profil">
+						<span class="foto">{#if currentUser.profile_image_url}<img src={currentUser.profile_image_url} alt="" />{:else}{initials}{/if}</span>
 						<span>Profil</span>
 					</a>
 				{:else}
-					<div class="auth-actions">
-						<button class="link-btn" onclick={goToSignin}>Sign in</button>
-						<button class="signup-btn" onclick={goToSignup}>Sign up</button>
+					<div class="aksi-autentikasi">
+						<button class="tombol-tautan" onclick={goToSignin}>Sign in</button>
+						<button class="tombol-daftar" onclick={goToSignup}>Sign up</button>
 					</div>
 				{/if}
 			</div>
 		</div>
 	</header>
 
-	<div class="header-spacer"></div>
+	<div class="pemisah-bilah"></div>
 	{/if}
 
-	<main class="app-main">
+	<main class="utama-aplikasi">
 		{@render children()}
 	</main>
 	<Modal />
 
 	{#if notificationPromptOpen}
-		<div class="notification-backdrop" role="presentation">
-			<dialog open class="notification-modal" aria-labelledby="notification-title">
-				<button class="modal-close" aria-label="Tutup" onclick={closeNotificationPrompt}>×</button>
-				<span class="modal-kicker">Pemberitahuan penting</span>
-				<h2 id="notification-title">Jangan lewatkan kabar dari lahanmu.</h2>
+		<div class="latar-notifikasi" role="presentation">
+			<dialog open class="dialog-notifikasi" aria-labelledby="judul-notifikasi">
+				<button class="tutup-dialog" aria-label="Tutup" onclick={closeNotificationPrompt}>×</button>
+				<span class="label-dialog">Pemberitahuan penting</span>
+				<h2 id="judul-notifikasi">Jangan lewatkan kabar dari lahanmu.</h2>
 				<p>Aktifkan notifikasi untuk menerima perubahan prediksi cuaca, analisis pasar, rekomendasi lahan, dan pembaruan pesanan toko.</p>
-				<div class="modal-actions">
-					<button class="modal-primary" onclick={toggleNotifications}>Aktifkan notifikasi</button>
-					<button class="modal-secondary" onclick={closeNotificationPrompt}>Nanti saja</button>
+				<div class="aksi-dialog">
+					<button class="utama-dialog" onclick={toggleNotifications}>Aktifkan notifikasi</button>
+					<button class="pendukung-dialog" onclick={closeNotificationPrompt}>Nanti saja</button>
 				</div>
-				<label class="snooze-option">
+				<label class="opsi-tunda">
 					<input type="checkbox" bind:checked={doNotRemind} />
 					<span>Jangan ingatkan saya selama 7 hari</span>
 				</label>
@@ -314,13 +319,13 @@
 	{/if}
 
 	{#if !isAuthRoute}
-	<footer class="app-footer">
-		<div class="footer-inner">
-			<div class="footer-brand-col">
-				<a class="footer-brand" href="/dashboard"><img src="/tani-siaga-logo.svg" alt="" />Tani Siaga</a>
+	<footer class="kaki-halaman-aplikasi">
+		<div class="dalam-kaki-halaman">
+			<div class="kolom-merek-kaki-halaman">
+				<a class="merek-kaki-halaman" href="/dashboard"><img src="/tani-siaga-logo.svg" alt="" />Tani Siaga</a>
 				<p>Teknologi yang tumbuh bersama petani.</p>
 			</div>
-			<div class="footer-links">
+			<div class="tautan-kaki-halaman">
 				<a href="/tentang-kami">Tentang Kami</a>
 				<a href="/dashboard">Dashboard</a>
 				<a href="/komoditas">Komoditas</a>
@@ -331,22 +336,21 @@
 				<a href="/e-commerce">E-Commerce</a>
 				<a href="/toko">Toko</a>
 			</div>
-			<span class="copyright">© {new Date().getFullYear()} Tani Siaga</span>
+			<span class="hak-cipta">© {new Date().getFullYear()} Tani Siaga</span>
 		</div>
 	</footer>
 	{/if}
 </div>
 
 <style>
-	.app-shell {
+	.kerangka-aplikasi {
 		min-height: 100vh;
 		display: flex;
 		flex-direction: column;
 		background: #f5f7f0;
 		color: #183126;
 	}
-
-	.app-header {
+	.bilah-aplikasi {
 		position: fixed;
 		top: 0;
 		left: 0;
@@ -356,20 +360,19 @@
 		color: #fff;
 		box-shadow: 0 5px 20px #12271d30;
 		transition: transform 0.42s cubic-bezier(0.16, 1, 0.3, 1),
-			opacity 0.35s ease,
-			box-shadow 0.3s ease;
+					opacity 0.35s ease,
+					box-shadow 0.3s ease;
 		opacity: 1;
 		transform: translateY(0);
 		will-change: transform, opacity;
 	}
-	.app-header.hidden {
+	.bilah-aplikasi.tersembunyi {
 		transform: translateY(-102%);
 		opacity: 0;
 		pointer-events: none;
 		box-shadow: none;
 	}
-
-	.header-inner {
+	.dalam-bilah {
 		display: flex;
 		align-items: center;
 		gap: 36px;
@@ -378,8 +381,7 @@
 		margin: auto;
 		padding: 0 38px;
 	}
-
-	.brand {
+	.merek {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -392,16 +394,30 @@
 		text-decoration: none;
 		white-space: nowrap;
 	}
-	.brand-mark {
+	.penanda-merek {
 		display: block;
 		width: 42px;
 		height: 42px;
 		object-fit: contain;
 	}
-	.brand-text { letter-spacing: 0; }
-	.nav-toggle { display: none; width: 40px; height: 40px; place-items: center; flex: 0 0 auto; border: 1px solid #526b5a; border-radius: 7px; background: transparent; color: #fff; font-size: 21px; line-height: 1; cursor: pointer; }
-
-	.main-nav {
+	.teks-merek {
+		letter-spacing: 0;
+	}
+	.alih-navigasi {
+		display: none;
+		width: 40px;
+		height: 40px;
+		place-items: center;
+		flex: 0 0 auto;
+		border: 1px solid #526b5a;
+		border-radius: 7px;
+		background: transparent;
+		color: #fff;
+		font-size: 21px;
+		line-height: 1;
+		cursor: pointer;
+	}
+	.navigasi-utama {
 		display: flex;
 		min-width: 0;
 		justify-content: flex-start;
@@ -411,9 +427,13 @@
 		overflow-x: auto;
 		scrollbar-width: none;
 	}
-	.main-nav::-webkit-scrollbar { display: none; }
-	.main-nav a { flex: 0 0 auto; }
-	.main-nav a {
+	.navigasi-utama::-webkit-scrollbar {
+		display: none;
+	}
+	.navigasi-utama a {
+		flex: 0 0 auto;
+	}
+	.navigasi-utama a {
 		color: #c3d3c0;
 		font-size: 13px;
 		font-weight: 700;
@@ -422,17 +442,50 @@
 		padding: 6px 2px;
 		border-bottom: 2px solid transparent;
 	}
-	.main-nav a:hover { color: #f7d88f; }
-	.main-nav a.active {
+	.navigasi-utama a:hover {
+		color: #f7d88f;
+	}
+	.navigasi-utama a.aktif {
 		color: #fff;
 		border-bottom-color: #f7d88f;
 	}
-
-	.header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex: 0 0 auto; }
-	.notification-link { position: relative; display: grid; place-items: center; width: 30px; height: 34px; color: #fff; text-decoration: none; }
-	.bell { font-size: 17px; line-height: 1; filter: grayscale(1) brightness(2); }
-	.notification-badge { position: absolute; top: 0; right: -3px; min-width: 16px; height: 16px; border-radius: 999px; background: #c9514b; color: #fff; padding: 0 4px; font-size: 9px; font-weight: 800; line-height: 16px; text-align: center; }
-	.notification-toggle {
+	.aksi-bilah {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 10px;
+		flex: 0 0 auto;
+	}
+	.tautan-notifikasi {
+		position: relative;
+		display: grid;
+		place-items: center;
+		width: 30px;
+		height: 34px;
+		color: #fff;
+		text-decoration: none;
+	}
+	.lonceng {
+		font-size: 17px;
+		line-height: 1;
+		filter: grayscale(1) brightness(2);
+	}
+	.lencana-notifikasi {
+		position: absolute;
+		top: 0;
+		right: -3px;
+		min-width: 16px;
+		height: 16px;
+		border-radius: 999px;
+		background: #c9514b;
+		color: #fff;
+		padding: 0 4px;
+		font-size: 9px;
+		font-weight: 800;
+		line-height: 16px;
+		text-align: center;
+	}
+	.alih-notifikasi {
 		display: flex;
 		align-items: center;
 		gap: 7px;
@@ -445,9 +498,14 @@
 		font-weight: 700;
 		cursor: pointer;
 	}
-	.notification-toggle:disabled { cursor: wait; opacity: .65; }
-	.toggle-label { white-space: nowrap; }
-	.toggle-track {
+	.alih-notifikasi:disabled {
+		cursor: wait;
+		opacity: .65;
+	}
+	.label-alih {
+		white-space: nowrap;
+	}
+	.jalur-alih {
 		position: relative;
 		display: block;
 		width: 34px;
@@ -456,7 +514,7 @@
 		background: #526b5a;
 		transition: background .2s ease;
 	}
-	.toggle-thumb {
+	.penggeser-alih {
 		position: absolute;
 		top: 3px;
 		left: 3px;
@@ -466,10 +524,16 @@
 		background: #f5f7f0;
 		transition: transform .2s ease;
 	}
-	.notification-toggle.on { color: #f7d88f; }
-	.notification-toggle.on .toggle-track { background: #6eaa78; }
-	.notification-toggle.on .toggle-thumb { transform: translateX(15px); }
-	.profile-link {
+	.alih-notifikasi.aktif {
+		color: #f7d88f;
+	}
+	.alih-notifikasi.aktif .jalur-alih {
+		background: #6eaa78;
+	}
+	.alih-notifikasi.aktif .penggeser-alih {
+		transform: translateX(15px);
+	}
+	.tautan-profil {
 		display: flex;
 		align-items: center;
 		gap: 9px;
@@ -479,9 +543,10 @@
 		text-decoration: none;
 		white-space: nowrap;
 	}
-	.avatar {
+	.foto {
 		display: grid;
 		place-items: center;
+		overflow: hidden;
 		width: 34px;
 		height: 34px;
 		border-radius: 50%;
@@ -489,12 +554,17 @@
 		color: #39754b;
 		font-weight: 800;
 	}
-	.auth-actions {
+	.foto img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+	.aksi-autentikasi {
 		display: flex;
 		align-items: center;
 		gap: 14px;
 	}
-	.link-btn {
+	.tombol-tautan {
 		background: transparent;
 		color: #c3d3c0;
 		border: none;
@@ -503,8 +573,10 @@
 		cursor: pointer;
 		transition: color 0.2s;
 	}
-	.link-btn:hover { color: #f7d88f; }
-	.signup-btn {
+	.tombol-tautan:hover {
+		color: #f7d88f;
+	}
+	.tombol-daftar {
 		border: 1px solid #6eaa78;
 		border-radius: 7px;
 		background: #39754b;
@@ -514,20 +586,20 @@
 		cursor: pointer;
 		transition: background 0.2s, transform 0.2s;
 	}
-	.signup-btn:hover { background: #2f633f; transform: translateY(-1px); }
-
-	.header-spacer {
+	.tombol-daftar:hover {
+		background: #2f633f;
+		transform: translateY(-1px);
+	}
+	.pemisah-bilah {
 		height: 76px;
 		flex-shrink: 0;
 	}
-
-	.app-main {
+	.utama-aplikasi {
 		flex: 1 0 auto;
 		display: flex;
 		flex-direction: column;
 	}
-
-	.notification-backdrop {
+	.latar-notifikasi {
 		position: fixed;
 		inset: 0;
 		z-index: 100;
@@ -536,7 +608,7 @@
 		padding: 20px;
 		background: #12271db8;
 	}
-	.notification-modal {
+	.dialog-notifikasi {
 		position: relative;
 		width: min(100%, 470px);
 		border: 1px solid #d6e1d5;
@@ -546,7 +618,7 @@
 		padding: 34px;
 		color: #183126;
 	}
-	.modal-close {
+	.tutup-dialog {
 		position: absolute;
 		top: 14px;
 		right: 16px;
@@ -557,43 +629,63 @@
 		line-height: 1;
 		cursor: pointer;
 	}
-	.modal-kicker {
+	.label-dialog {
 		color: #39754b;
 		font-size: 10px;
 		font-weight: 800;
 		letter-spacing: .14em;
 		text-transform: uppercase;
 	}
-	.notification-modal h2 {
+	.dialog-notifikasi h2 {
 		max-width: 360px;
 		margin: 12px 0 10px;
 		font: 600 31px/1.05 'Fraunces', Georgia, serif;
 	}
-	.notification-modal p {
+	.dialog-notifikasi p {
 		margin: 0;
 		color: #52705a;
 		font-size: 14px;
 		line-height: 1.6;
 	}
-	.modal-actions { display: flex; gap: 10px; margin-top: 24px; }
-	.modal-primary, .modal-secondary {
+	.aksi-dialog {
+		display: flex;
+		gap: 10px;
+		margin-top: 24px;
+	}
+	.utama-dialog, .pendukung-dialog {
 		border-radius: 7px;
 		padding: 11px 14px;
 		font: 700 12px 'DM Sans', sans-serif;
 		cursor: pointer;
 	}
-	.modal-primary { border: 1px solid #39754b; background: #39754b; color: #fff; }
-	.modal-secondary { border: 1px solid #a9c9aa; background: transparent; color: #39754b; }
-	.snooze-option { display: flex; align-items: center; gap: 8px; margin-top: 18px; color: #718077; font-size: 11px; }
-	.snooze-option input { accent-color: #39754b; }
-
-	.app-footer {
+	.utama-dialog {
+		border: 1px solid #39754b;
+		background: #39754b;
+		color: #fff;
+	}
+	.pendukung-dialog {
+		border: 1px solid #a9c9aa;
+		background: transparent;
+		color: #39754b;
+	}
+	.opsi-tunda {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin-top: 18px;
+		color: #718077;
+		font-size: 11px;
+	}
+	.opsi-tunda input {
+		accent-color: #39754b;
+	}
+	.kaki-halaman-aplikasi {
 		margin-top: auto;
 		background: #183126;
 		color: #c3d3c0;
 		flex-shrink: 0;
 	}
-	.footer-inner {
+	.dalam-kaki-halaman {
 		max-width: 1180px;
 		margin: auto;
 		padding: 44px 28px 40px;
@@ -602,7 +694,7 @@
 		gap: 30px;
 		align-items: start;
 	}
-	.footer-brand {
+	.merek-kaki-halaman {
 		display: inline-flex;
 		flex-direction: column;
 		align-items: center;
@@ -611,49 +703,102 @@
 		font: 700 12px 'DM Sans', sans-serif;
 		text-decoration: none;
 	}
-	.footer-brand img { width: 48px; height: 48px; object-fit: contain; }
-	.footer-brand-col p {
+	.merek-kaki-halaman img {
+		width: 48px;
+		height: 48px;
+		object-fit: contain;
+	}
+	.kolom-merek-kaki-halaman p {
 		margin: 10px 0 0;
 		color: #82948a;
 		font-size: 14px;
 		line-height: 1.5;
 	}
-	.footer-links {
+	.tautan-kaki-halaman {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 10px 24px;
 	}
-	.footer-links a {
+	.tautan-kaki-halaman a {
 		color: #c3d3c0;
 		font-size: 13px;
 		font-weight: 700;
 		text-decoration: none;
 		transition: color 0.2s;
 	}
-	.footer-links a:hover { color: #f7d88f; }
-	.copyright {
+	.tautan-kaki-halaman a:hover {
+		color: #f7d88f;
+	}
+	.hak-cipta {
 		color: #6d8074;
 		font-size: 12px;
 		text-align: right;
 		align-self: end;
 	}
-
 	@media (max-width: 1180px) {
-		.header-inner { position: relative; padding: 0 22px; gap: 14px; }
-		.brand { flex: 1 1 auto; }
-		.nav-toggle { display: grid; }
-		.main-nav { position: absolute; top: 100%; right: 0; left: 0; z-index: 1; display: none; max-height: calc(100vh - 76px); overflow-y: auto; flex-direction: column; flex-wrap: nowrap; align-items: stretch; justify-content: flex-start; gap: 0; padding: 8px 18px 16px; background: #183126; box-shadow: 0 12px 18px #12271d30; }
-		.main-nav.open { display: flex; }
-		.main-nav a { padding: 12px 8px; border-bottom: 1px solid #355141; }
-		.footer-inner { grid-template-columns: 1fr; }
-		.footer-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-		.copyright { text-align: left; }
+		.dalam-bilah {
+			position: relative;
+			padding: 0 22px;
+			gap: 14px;
+		}
+		.merek {
+			flex: 1 1 auto;
+		}
+		.alih-navigasi {
+			display: grid;
+		}
+		.navigasi-utama {
+			position: absolute;
+			top: 100%;
+			right: 0;
+			left: 0;
+			z-index: 1;
+			display: none;
+			max-height: calc(100vh - 76px);
+			overflow-y: auto;
+			flex-direction: column;
+			flex-wrap: nowrap;
+			align-items: stretch;
+			justify-content: flex-start;
+			gap: 0;
+			padding: 8px 18px 16px;
+			background: #183126;
+			box-shadow: 0 12px 18px #12271d30;
+		}
+		.navigasi-utama.buka {
+			display: flex;
+		}
+		.navigasi-utama a {
+			padding: 12px 8px;
+			border-bottom: 1px solid #355141;
+		}
+		.dalam-kaki-halaman {
+			grid-template-columns: 1fr;
+		}
+		.tautan-kaki-halaman {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+		.hak-cipta {
+			text-align: left;
+		}
 	}
 	@media (max-width: 520px) {
-		.header-inner { min-height: 68px; padding: 0 14px; gap: 8px; }
-		.header-actions { gap: 6px; }
-		.toggle-label, .profile-link > span:last-child { display: none; }
-		.header-spacer { height: 68px; }
-		.footer-links { grid-template-columns: 1fr 1fr; }
+		.dalam-bilah {
+			min-height: 68px;
+			padding: 0 14px;
+			gap: 8px;
+		}
+		.aksi-bilah {
+			gap: 6px;
+		}
+		.label-alih, .tautan-profil > span:last-child {
+			display: none;
+		}
+		.pemisah-bilah {
+			height: 68px;
+		}
+		.tautan-kaki-halaman {
+			grid-template-columns: 1fr 1fr;
+		}
 	}
 </style>

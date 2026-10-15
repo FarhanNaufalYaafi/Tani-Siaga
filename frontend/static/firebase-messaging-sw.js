@@ -5,7 +5,6 @@ firebase.initializeApp({
   apiKey: 'AIzaSyDBKHpNUUOUvtNngU7MUjBmv7IRkxk2xZ8',
   authDomain: 'tani-siaga.firebaseapp.com',
   projectId: 'tani-siaga',
-  storageBucket: 'tani-siaga.firebasestorage.app',
   messagingSenderId: '744928358215',
   appId: '1:744928358215:web:1eef1430afa5ab46a12662'
 });

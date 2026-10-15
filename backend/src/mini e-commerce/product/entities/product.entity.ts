@@ -31,6 +31,24 @@ export class Product {
   @Column({ default: true })
   is_active!: boolean;
 
+  @Column({ type: 'varchar', length: 20, default: 'pending' })
+  approval_status!: 'pending' | 'approved' | 'rejected';
+
+  @Column({ type: 'text', nullable: true })
+  rejection_reason!: string | null;
+
+  @Column({ type: 'boolean', nullable: true })
+  active_before_shop_ban?: boolean | null;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  admin_action!: 'disabled' | 'deleted' | null;
+
+  @Column({ type: 'text', nullable: true })
+  admin_action_reason!: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  admin_action_at!: Date | null;
+
   @Column({
     type: "varchar",
     length: 1500,

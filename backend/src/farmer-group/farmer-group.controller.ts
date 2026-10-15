@@ -4,6 +4,8 @@ import { JwtGuard } from 'src/auth/guards/jwt.guard';
 import { create } from 'domain';
 import { CreateFarmerDto } from './dtos/create-farmer-group.dto';
 import { AddMemberDto } from './dtos/add-member.dto';
+import { RolesGuard } from 'src/auth/guards/role.guard';
+import { Roles } from 'src/auth/decorator/role.decorator';
 
 @Controller('farmer-group')
 export class FarmerGroupController {
@@ -111,5 +113,35 @@ export class FarmerGroupController {
   ) {
     const leaderUserId = req.user.userId;
     return await this.farmerGroupService.removeMember(targetUserId, leaderUserId);
+  }
+
+  @Get('admin/groups')
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles('admin')
+  async getGroupsForAdmin(
+    @Query('page') page = '1',
+    @Query('limit') limit = '8',
+    @Query('search') search = '',
+  ) {
+    return {
+      message: 'Daftar kelompok tani untuk admin',
+      ...(await this.farmerGroupService.getGroupsForAdmin(Number(page), Number(limit), search)),
+    };
+  }
+
+  @Delete('admin/groups/:id')
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles('admin')
+  @HttpCode(HttpStatus.OK)
+  async deleteGroupByAdmin(@Param('id', ParseIntPipe) groupId: number, @Body() dto: { reason?: string }) {
+    return this.farmerGroupService.deleteGroupByAdmin(groupId, dto?.reason);
+  }
+
+  @Delete('admin/members/:userId')
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles('admin')
+  @HttpCode(HttpStatus.OK)
+  async removeMemberByAdmin(@Param('userId', ParseIntPipe) userId: number) {
+    return this.farmerGroupService.removeMemberByAdmin(userId);
   }
 }

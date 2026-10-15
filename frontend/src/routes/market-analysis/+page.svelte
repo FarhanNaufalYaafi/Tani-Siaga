@@ -43,37 +43,37 @@
 	<meta name="description" content="Analisis pasar komoditas dari data BPS dan Tani Siaga untuk lahanmu." />
 </svelte:head>
 
-<main class="market-page">
-	<a class="back-link" href="/dashboard">← Dashboard</a>
-	<header class="page-heading">
+<main class="halaman-pasar">
+	<a class="tautan-kembali" href="/dashboard">← Dashboard</a>
+	<header class="judul-halaman">
 		<div>
-			<p class="eyebrow">BPS + DATA TANI SIAGA</p>
-			<h1>Analisis Pasar</h1>
-			<p class="subtitle">Prospek komoditas berdasarkan wilayah dan lahan yang terhubung dengan akunmu.</p>
+			<p class="label-kecil">BPS + DATA TANI SIAGA</p>
+			<h1 class="judul">Analisis Pasar</h1>
+			<p class="subjudul">Prospek komoditas berdasarkan wilayah dan lahan yang terhubung dengan akunmu.</p>
 		</div>
-		{#if !isLoading && !errorMessage}<span class="total-count">{total} analisis</span>{/if}
+		{#if !isLoading && !errorMessage}<span class="jumlah-total">{total} analisis</span>{/if}
 	</header>
 
 	{#if errorMessage}
-		<div class="state error" role="alert"><p>{errorMessage}</p><button type="button" onclick={() => void loadAnalyses(page)}>Coba lagi</button></div>
+		<div class="keadaan galat" role="alert"><p>{errorMessage}</p><button type="button" onclick={() => void loadAnalyses(page)}>Coba lagi</button></div>
 	{:else if isLoading}
-		<div class="state">Memuat analisis pasar...</div>
+		<div class="keadaan">Memuat analisis pasar...</div>
 	{:else if analyses.length === 0}
-		<div class="state empty"><strong>Belum ada analisis pasar untuk lahanmu.</strong><p>Analisis akan muncul setelah lahan dan komoditas aktif tersedia.</p><a href="/lahan-tani">Lihat lahan tani →</a></div>
+		<div class="keadaan kosong"><strong>Belum ada analisis pasar untuk lahanmu.</strong><p>Analisis akan muncul setelah lahan dan komoditas aktif tersedia.</p><a href="/lahan-tani">Lihat lahan tani →</a></div>
 	{:else}
-		<section class="analysis-grid" aria-label="Daftar analisis pasar">
+		<section class="kisi-analisis" aria-label="Daftar analisis pasar">
 			{#each analyses as analysis (analysis.id)}
-				<a class="analysis-card" href={`/market-analysis/${analysis.id}`}>
-					<div class="card-topline"><span class="source-mark">BPS</span><time>{formatDate(analysis.created_at)}</time></div>
-					<p class="eyebrow">PROSPEK KOMODITAS</p>
+				<a class="kartu-analisis" href={`/market-analysis/${analysis.id}`}>
+					<div class="baris-kartu"><span class="penanda-sumber">BPS</span><time>{formatDate(analysis.created_at)}</time></div>
+					<p class="label-kecil">PROSPEK KOMODITAS</p>
 					<h2>{analysis.commodity_name}</h2>
-					<div class="metrics">
-						<div><span>Tren harga</span><strong class:up={analysis.price_trend === 'NAIK'} class:down={analysis.price_trend === 'TURUN'}>{analysis.price_trend}</strong></div>
+					<div class="indikator">
+						<div><span>Tren harga</span><strong class:atas={analysis.price_trend === 'NAIK'} class:bawah={analysis.price_trend === 'TURUN'}>{analysis.price_trend}</strong></div>
 						<div><span>Surplus wilayah</span><strong>{surplus(analysis.surplus_percentage)}</strong></div>
 					</div>
-					<p class="summary">{analysis.prediction_meta?.simple_summary_for_farmers || analysis.analysis_summary}</p>
-					<div class="farmland-list"><span>Lahan terkait</span><div>{#each analysis.related_farmlands || [] as farmland (farmland.id)}<span class="farmland-chip">{farmland.name}</span>{/each}</div></div>
-					<span class="detail-link">Buka analisis <span aria-hidden="true">↗</span></span>
+					<p class="ringkasan">{analysis.prediction_meta?.simple_summary_for_farmers || analysis.analysis_summary}</p>
+					<div class="daftar-lahan"><span>Lahan terkait</span><div>{#each analysis.related_farmlands || [] as farmland (farmland.id)}<span class="label-lahan">{farmland.name}</span>{/each}</div></div>
+					<span class="tautan-rincian">Buka analisis <span aria-hidden="true">↗</span></span>
 				</a>
 			{/each}
 		</section>
@@ -82,37 +82,253 @@
 </main>
 
 <style>
-	.market-page { width: min(100% - 56px, 1100px); margin: 0 auto; padding: 38px 0 80px; color: #183126; }
-	.back-link { display: inline-block; margin-bottom: 28px; color: #39754b; font-size: 13px; font-weight: 700; text-decoration: none; }
-	.page-heading { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin-bottom: 28px; }
-	.eyebrow { margin: 0 0 9px; color: #4e805a; font-size: 10px; font-weight: 800; letter-spacing: .14em; }
-	h1 { margin: 0; font: 600 52px/1 'Fraunces', Georgia, serif; }
-	.subtitle { max-width: 650px; margin: 12px 0 0; color: #718077; font-size: 14px; line-height: 1.6; }
-	.total-count { color: #718077; font-size: 12px; white-space: nowrap; }
-	.analysis-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-	.analysis-card { display: grid; gap: 14px; min-width: 0; border: 1px solid #d6e1d5; border-radius: 9px; background: #fff; padding: 20px; color: inherit; text-decoration: none; transition: border-color .18s, transform .18s, box-shadow .18s; }
-	.analysis-card:hover { transform: translateY(-2px); border-color: #77a87b; box-shadow: 0 10px 24px #23472e10; }
-	.card-topline { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-	.source-mark { display: inline-grid; place-items: center; min-width: 36px; height: 26px; border-radius: 4px; background: #1b4d8f; color: #fff; font: 800 10px Arial,sans-serif; }
-	time { color: #829087; font-size: 10px; }
-	.analysis-card .eyebrow { margin-bottom: -8px; }
-	h2 { margin: 0; font: 600 27px/1.1 'Fraunces', Georgia, serif; overflow-wrap: anywhere; }
-	.metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
-	.metrics > div { display: grid; gap: 5px; border-radius: 6px; background: #f4f8f2; padding: 12px; }
-	.metrics span { color: #718077; font-size: 10px; }
-	.metrics strong { color: #39754b; font-size: 17px; }
-	.metrics strong.up { color: #a44242; }
-	.metrics strong.down { color: #39754b; }
-	.summary { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; margin: 0; color: #53665a; font-size: 12px; line-height: 1.6; }
-	.farmland-list { display: grid; gap: 7px; padding-top: 12px; border-top: 1px solid #e8eee6; }
-	.farmland-list > span { color: #718077; font-size: 10px; font-weight: 700; }
-	.farmland-list > div { display: flex; flex-wrap: wrap; gap: 6px; }
-	.farmland-chip { border-radius: 999px; background: #eaf4e9; color: #39754b; padding: 5px 8px; font-size: 10px; }
-	.detail-link { display: flex; justify-content: space-between; align-items: center; margin-top: auto; padding-top: 8px; color: #39754b; font-size: 11px; font-weight: 800; }
-	.state { border: 1px solid #d6e1d5; border-radius: 8px; background: #fff; padding: 42px 20px; color: #718077; text-align: center; }
-	.state p { margin: 8px 0 0; font-size: 13px; }
-	.state a { display: inline-block; margin-top: 14px; color: #39754b; font-size: 12px; font-weight: 800; text-decoration: none; }
-	.state.error { border-color: #e6b8b3; background: #fff0ef; color: #a44242; }
-	.state button { margin-top: 14px; border: 1px solid #a44242; border-radius: 6px; background: #fff; color: #a44242; padding: 9px 12px; font: inherit; font-size: 12px; cursor: pointer; }
-	@media (max-width: 700px) { .market-page { width: min(100% - 32px, 1100px); padding-top: 24px; }.back-link { margin-bottom: 20px; }.page-heading { align-items: flex-start; flex-direction: column; gap: 9px; margin-bottom: 22px; } h1 { font-size: 32px; line-height: 1.08; }.subtitle { margin-top: 9px; font-size: 13px; }.analysis-grid { grid-template-columns: 1fr; gap: 12px; }.analysis-card { gap: 11px; padding: 14px; } h2 { font-size: 22px; }.metrics { gap: 7px; }.metrics > div { padding: 10px; }.metrics strong { font-size: 16px; }.summary { font-size: 11px; }.farmland-list { padding-top: 10px; } }
+	.halaman-pasar {
+		width: min(100% - 56px, 1100px);
+		margin: 0 auto;
+		padding: 38px 0 80px;
+		color: #183126;
+	}
+	.tautan-kembali {
+		display: inline-block;
+		margin-bottom: 28px;
+		color: #39754b;
+		font-size: 13px;
+		font-weight: 700;
+		text-decoration: none;
+	}
+	.judul-halaman {
+		display: flex;
+		align-items: end;
+		justify-content: space-between;
+		gap: 20px;
+		margin-bottom: 28px;
+	}
+	.label-kecil {
+		margin: 0 0 9px;
+		color: #4e805a;
+		font-size: 10px;
+		font-weight: 800;
+		letter-spacing: .14em;
+	}
+	h1 {
+		margin: 0;
+		font: 600 52px/1 'Fraunces', Georgia, serif;
+	}
+	.subjudul {
+		max-width: 650px;
+		margin: 12px 0 0;
+		color: #718077;
+		font-size: 14px;
+		line-height: 1.6;
+	}
+	.jumlah-total {
+		color: #718077;
+		font-size: 12px;
+		white-space: nowrap;
+	}
+	.kisi-analisis {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 16px;
+	}
+	.kartu-analisis {
+		display: grid;
+		gap: 14px;
+		min-width: 0;
+		border: 1px solid #d6e1d5;
+		border-radius: 9px;
+		background: #fff;
+		padding: 20px;
+		color: inherit;
+		text-decoration: none;
+		transition: border-color .18s, transform .18s, box-shadow .18s;
+	}
+	.kartu-analisis:hover {
+		transform: translateY(-2px);
+		border-color: #77a87b;
+		box-shadow: 0 10px 24px #23472e10;
+	}
+	.baris-kartu {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+	}
+	.penanda-sumber {
+		display: inline-grid;
+		place-items: center;
+		min-width: 36px;
+		height: 26px;
+		border-radius: 4px;
+		background: #1b4d8f;
+		color: #fff;
+		font: 800 10px Arial,sans-serif;
+	}
+	time {
+		color: #829087;
+		font-size: 10px;
+	}
+	.kartu-analisis .label-kecil {
+		margin-bottom: -8px;
+	}
+	h2 {
+		margin: 0;
+		font: 600 27px/1.1 'Fraunces', Georgia, serif;
+		overflow-wrap: anywhere;
+	}
+	.indikator {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 9px;
+	}
+	.indikator > div {
+		display: grid;
+		gap: 5px;
+		border-radius: 6px;
+		background: #f4f8f2;
+		padding: 12px;
+	}
+	.indikator span {
+		color: #718077;
+		font-size: 10px;
+	}
+	.indikator strong {
+		color: #39754b;
+		font-size: 17px;
+	}
+	.indikator strong.atas {
+		color: #a44242;
+	}
+	.indikator strong.bawah {
+		color: #39754b;
+	}
+	.ringkasan {
+		display: -webkit-box;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 3;
+		line-clamp: 3;
+		overflow: hidden;
+		margin: 0;
+		color: #53665a;
+		font-size: 12px;
+		line-height: 1.6;
+	}
+	.daftar-lahan {
+		display: grid;
+		gap: 7px;
+		padding-top: 12px;
+		border-top: 1px solid #e8eee6;
+	}
+	.daftar-lahan > span {
+		color: #718077;
+		font-size: 10px;
+		font-weight: 700;
+	}
+	.daftar-lahan > div {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+	}
+	.label-lahan {
+		border-radius: 999px;
+		background: #eaf4e9;
+		color: #39754b;
+		padding: 5px 8px;
+		font-size: 10px;
+	}
+	.tautan-rincian {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-top: auto;
+		padding-top: 8px;
+		color: #39754b;
+		font-size: 11px;
+		font-weight: 800;
+	}
+	.keadaan {
+		border: 1px solid #d6e1d5;
+		border-radius: 8px;
+		background: #fff;
+		padding: 42px 20px;
+		color: #718077;
+		text-align: center;
+	}
+	.keadaan p {
+		margin: 8px 0 0;
+		font-size: 13px;
+	}
+	.keadaan a {
+		display: inline-block;
+		margin-top: 14px;
+		color: #39754b;
+		font-size: 12px;
+		font-weight: 800;
+		text-decoration: none;
+	}
+	.keadaan.galat {
+		border-color: #e6b8b3;
+		background: #fff0ef;
+		color: #a44242;
+	}
+	.keadaan button {
+		margin-top: 14px;
+		border: 1px solid #a44242;
+		border-radius: 6px;
+		background: #fff;
+		color: #a44242;
+		padding: 9px 12px;
+		font: inherit;
+		font-size: 12px;
+		cursor: pointer;
+	}
+	@media (max-width: 700px) {
+		.halaman-pasar {
+			width: min(100% - 32px, 1100px);
+			padding-top: 24px;
+		}
+		.tautan-kembali {
+			margin-bottom: 20px;
+		}
+		.judul-halaman {
+			align-items: flex-start;
+			flex-direction: column;
+			gap: 9px;
+			margin-bottom: 22px;
+		}
+		h1 {
+			font-size: 32px;
+			line-height: 1.08;
+		}
+		.subjudul {
+			margin-top: 9px;
+			font-size: 13px;
+		}
+		.kisi-analisis {
+			grid-template-columns: 1fr;
+			gap: 12px;
+		}
+		.kartu-analisis {
+			gap: 11px;
+			padding: 14px;
+		}
+		h2 {
+			font-size: 22px;
+		}
+		.indikator {
+			gap: 7px;
+		}
+		.indikator > div {
+			padding: 10px;
+		}
+		.indikator strong {
+			font-size: 16px;
+		}
+		.ringkasan {
+			font-size: 11px;
+		}
+		.daftar-lahan {
+			padding-top: 10px;
+		}
+	}
 </style>

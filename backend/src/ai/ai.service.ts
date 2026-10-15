@@ -8,6 +8,7 @@ import { AiRecommendation } from './entities/ai-recomendation.entity';
 import { Farmland } from 'src/farmlands/entities/farmlands.entity';
 import { MarketAnalysis } from './entities/market-analysis.entity';
 import { QueryHistoryDto } from './dtos/query-history.dto';
+import { calculateWeightedSupplyMetrics } from './market-analysis.util';
 
 export interface WeatherAiAnalysis {
   summary: string;
@@ -304,9 +305,6 @@ PENTING: Jawab HANYA dalam format JSON valid tanpa tambahan teks lain atau markd
       }
     }
 
-    // 2. Ambil data baseline statistik resmi dari BPS Pusat
-    const bpsBaselineData = await this.bpsService.getRegionalAgriculturalBaseline(provinceCode);
-
     // Grouping lahan berdasarkan komoditas dari relasi Farmland -> Commodity
     const commodityGroups: { [key: string]: Farmland[] } = {};
     for (const f of farmlandsInProvince) {
@@ -321,6 +319,35 @@ PENTING: Jawab HANYA dalam format JSON valid tanpa tambahan teks lain atau markd
       const totalArea = lands.reduce((acc, l) => acc + Number(l.area_size || 0), 0);
       const totalEstimatedYield = lands.reduce((acc, l) => acc + Number(l.ai_estimated_yield_kg || 0), 0);
       const plantDates = lands.map((l) => l.plant_date).filter(Boolean);
+      const bpsBaselineData = await this.bpsService.getRegionalAgriculturalBaseline(
+        provinceCode,
+        commodityName,
+      );
+      if (!bpsBaselineData) {
+        this.logger.warn(
+          `Analisis ${commodityName} dilewati karena data produksi BPS provinsi tidak tersedia atau terlalu lama.`,
+        );
+        continue;
+      }
+
+      const supplyMetrics = calculateWeightedSupplyMetrics(
+        bpsBaselineData.production_by_year,
+        totalEstimatedYield,
+        totalArea,
+      );
+      if (!supplyMetrics) {
+        this.logger.warn(`Analisis ${commodityName} dilewati karena baseline pasokan tidak valid.`);
+        continue;
+      }
+
+      const weightedSupplyPercentage =
+        supplyMetrics.weighted_supply_change_percentage;
+      const priceTrend: MarketAnalysis['price_trend'] =
+        weightedSupplyPercentage > 3
+          ? 'TURUN'
+          : weightedSupplyPercentage < -3
+            ? 'NAIK'
+            : 'STABIL';
 
       const commDetail = lands[0]?.commodity;
       const commodityParams = commDetail
@@ -347,11 +374,15 @@ Tugas utama kamu adalah melakukan analisis pasar yang presisi, obyektif, dan log
 - Parameter Ideal Komoditas: ${JSON.stringify(commodityParams)}
 
 [B. DATA BASELINE STATISTIK BPS PUSAT (MAKRO - HISTORIS REGIONAL)]
-${
-  bpsBaselineData
-    ? JSON.stringify(bpsBaselineData)
-    : 'Data BPS tidak spesifik, gunakan asumsi rata-rata produktivitas historis daerah setempat.'
-}
+${JSON.stringify(bpsBaselineData)}
+
+[HASIL PEMBOBOTAN PASOKAN (DIHITUNG SISTEM, WAJIB DIPERTAHANKAN)]
+${JSON.stringify(supplyMetrics)}
+- Indeks BPS membandingkan produksi tahun terbaru dengan rata-rata hingga tiga tahun sebelumnya.
+- Indeks internal membandingkan estimasi hasil tani dengan baseline 0,5 kg/m².
+- Perubahan pasokan akhir dihitung deterministik: 80% indeks BPS + 20% indeks internal.
+- Jangan mengubah nilai surplus_percentage atau price_trend dari hasil sistem.
+- Angka ini adalah perubahan terhadap baseline pasokan, bukan pengukuran surplus terhadap permintaan pasar.
 
 [C. DATA PREDIKSI CUACA BMKG (FAKTOR RISIKO IKLIM)]
 ${JSON.stringify(weatherSnapshots)}
@@ -363,8 +394,8 @@ ${JSON.stringify(weatherSnapshots)}
 Gunakan algoritma berpikir berurutan berikut untuk menghasilkan analisis yang akurat:
 
 LANGKAH 1: PEMBOBOTAN PASOKAN REGIONAL (SUPPLY WEIGHTING)
-- Jika jumlah sampel Tani Siaga (${lands.length} lahan) tergolong sedikit (< 50 lahan), gunakan Data Baseline BPS sebagai **Bobot Utama (80%)** dan Data Tani Siaga sebagai **Sinyal Tren Lokal (20%)**.
-- Jika sampel Tani Siaga melimpah (> 50 lahan), tingkatkan bobot sampel Tani Siaga menjadi hingga 50%.
+- Gunakan bobot tetap 80% untuk data BPS dan 20% untuk data internal Tani Siaga, berapa pun jumlah lahannya.
+- Jangan mengarang bobot alternatif atau mengganti data BPS dengan asumsi.
 
 LANGKAH 2: KALKULASI PROYEKSI PANEN & EVALUASI CUACA BMKG (PEMBATASAN WILAYAH)
 - **FOKUS WILAYAH UTAMA**: Utamakan data cuaca BMKG dari lahan yang sedang dianalisis.
@@ -374,10 +405,9 @@ LANGKAH 2: KALKULASI PROYEKSI PANEN & EVALUASI CUACA BMKG (PEMBATASAN WILAYAH)
 - Evaluasi data cuaca BMKG lokal tersebut. Jika terdapat indikasi hujan ekstrem, kekeringan, atau suhu di luar batas ideal komoditas, kurangi (*downgrade*) potensi estimasi panen sebesar 10% - 30% akibat risiko gagal panen / serangan hama.
 
 LANGKAH 3: PENETAPAN HUKUM EKONOMI PASAR (LOGIKA WAJIB)
-- Jika Pasokan Bersih (BPS + Tani Siaga - Koreksi Cuaca) > Kebutuhan Rata-rata Daerah -> Pasokan **SURPLUS** (surplus_percentage > 0).
-- Jika Pasokan **SURPLUS**, maka Proyeksi Harga HARUS **TURUN** atau **STABIL** (jika surplus sangat kecil < 3%).
-- Jika Pasokan Bersih < Kebutuhan Rata-rata Daerah -> Pasokan **DEFISIT** (surplus_percentage < 0).
-- Jika Pasokan **DEFISIT**, maka Proyeksi Harga HARUS **NAIK**.
+- Gunakan surplus_percentage dan price_trend yang sudah dihitung sistem dari indeks pasokan berbobot 80/20.
+- Data permintaan dan harga pasar tidak tersedia; jangan menyatakan surplus/defisit aktual atau mengarang angka permintaan.
+- Jelaskan tren sebagai indikasi perubahan produksi terhadap baseline historis, bukan kepastian perubahan harga pasar.
 
 LANGKAH 4: ANALOGI & PEMBELAJARAN HISTORIS (1 PARAGRAF TAMBAHAN)
 - Cari dan hubungkan kondisi lahan/cuaca/pasokan saat ini dengan **peristiwa atau krisis serupa di masa lalu di Indonesia** (misal: fenomena El Niño/La Niña tahun tertentu, krisis harga cabai/bawang, atau gelombang cuaca buruk regional tertentu).
@@ -394,8 +424,8 @@ LANGKAH 5: KESIMPULAN SEDERHANA (1 KALIMAT SINGKAT)
 Jawab HANYA dalam format JSON valid tanpa tambahan teks penjelasan di luar JSON atau markdown block (tanpa \`\`\`json):
 
 {
-  "surplus_percentage": 0.0,
-  "price_trend": "NAIK | TURUN | STABIL",
+  "surplus_percentage": ${weightedSupplyPercentage},
+  "price_trend": "${priceTrend}",
   "simple_summary_for_farmers": "Satu kalimat kesimpulan singkat dan sangat mudah dipahami petani tanpa istilah rumit.",
   "analysis_summary": "Penjelasan kuantitatif & kualitatif gabungan BPS, Tani Siaga, dan BMKG secara ringkas dan padat (fokus pada wilayah kabupaten setempat).",
   "historical_analogy_context": "Satu paragraf penjelas situasi saat ini dan prediksi kedepan yang membandingkannya dengan kejadian/kejadian krisis historis nyata yang mirip di Indonesia di masa lalu. Berikan disclaimer halus bahwa data historis ini adalah wawasan pendukung yang tidak wajib diikuti, namun berguna untuk kewaspadaan.",
@@ -423,15 +453,23 @@ Jawab HANYA dalam format JSON valid tanpa tambahan teks penjelasan di luar JSON 
           this.marketAnalysisRepo.create({
             province_code: provinceCode,
             commodity_name: commodityName,
-            surplus_percentage: parsed.surplus_percentage ?? 0,
-            price_trend: parsed.price_trend ?? 'STABIL',
+            surplus_percentage: weightedSupplyPercentage,
+            price_trend: priceTrend,
             analysis_summary: parsed.analysis_summary ?? '',
             prediction_meta: {
               ...parsed.future_prediction,
               simple_summary_for_farmers: parsed.simple_summary_for_farmers, // 👈 Simpan ringkasan petani
               historical_analogy_context: parsed.historical_analogy_context, // 👈 Simpan konteks historis
               weather_snapshot_used: weatherSnapshots,
-              bps_baseline_used: !!bpsBaselineData,
+              bps_baseline_used: true,
+              bps_baseline_source: {
+                domain: bpsBaselineData.domain,
+                table_id: bpsBaselineData.table_id,
+                table_title: bpsBaselineData.table_title,
+                latest_year: supplyMetrics.bps_latest_year,
+                production_by_year: bpsBaselineData.production_by_year,
+              },
+              supply_metrics: supplyMetrics,
             },
           }),
         );

@@ -7,10 +7,10 @@
 	});
 </script>
 
-<div class="redirect-state">Mengalihkan ke Dashboard...</div>
+<div class="keadaan-alihkan">Mengalihkan ke Dashboard...</div>
 
 <style>
-	.redirect-state {
+	.keadaan-alihkan {
 		padding: 80px 40px;
 		text-align: center;
 		color: #718077;

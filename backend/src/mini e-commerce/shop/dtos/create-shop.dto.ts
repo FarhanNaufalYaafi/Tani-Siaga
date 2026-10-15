@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsPhoneNumber, IsString, MaxLength, MinLength } from "class-validator"
+import { IsNotEmpty, IsOptional, IsPhoneNumber, IsString, MaxLength, MinLength } from "class-validator"
 
 export class CreateShopDto{
     @IsString()
@@ -6,6 +6,11 @@ export class CreateShopDto{
     @MaxLength(100)
     @IsNotEmpty()
     name!: string
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(2048)
+    profile_image_url?: string
 
     @IsString()
     @MinLength(20)

@@ -33,10 +33,17 @@ export interface Product {
   estimated_harvest_date?: string | null;
   po_quota_kg: number;
   po_booked_kg: number;
+  approval_status?: 'pending' | 'approved' | 'rejected';
+  is_active?: boolean;
+  admin_action?: 'disabled' | 'deleted' | null;
+  admin_action_reason?: string | null;
+  admin_action_at?: string | null;
   shop?: ProductShop | null;
   farmland?: ProductFarmland | null;
   sold_quantity?: number;
   completed_orders?: number;
+  rating_average?: number;
+  rating_count?: number;
   booked_percentage?: number | null;
   weather_forecasts?: ProductWeatherForecast[];
 }
@@ -66,6 +73,32 @@ export interface CreateProductPayload {
 export interface ProductCatalog {
   data: Product[];
   meta: { page: number; limit: number; total: number; total_pages: number };
+}
+
+export interface ProductReview {
+  id: number;
+  rating: number;
+  comment: string;
+  createdAt: string;
+  user_id: number;
+  user_email?: string | null;
+  user_image_url?: string | null;
+  repeat_order_count: number;
+  image_urls: string[];
+}
+
+export interface ProductReviewsResponse {
+  average_rating: number;
+  rating_count: number;
+  reviews: ProductReview[];
+  meta: { page: number; limit: number; total: number; total_pages: number };
+}
+
+export interface ProductReviewEligibility {
+  eligible: boolean;
+  order_ids: number[];
+  has_review: boolean;
+  review_id: number | null;
 }
 
 async function request<T>(url: string, method = 'GET', body?: unknown): Promise<T> {
@@ -99,6 +132,33 @@ export function getProducts(category: 'all' | 'pre_order' | 'ready_stock' = 'all
 
 export function getProductById(id: string | number): Promise<Product> {
   return request<Product>(`/products/${id}`);
+}
+
+export function getProductReviews(id: string | number, page = 1, limit = 10): Promise<ProductReviewsResponse> {
+  return request<ProductReviewsResponse>(`/products/${id}/reviews?page=${page}&limit=${limit}`);
+}
+
+export function getProductReviewEligibility(id: string | number): Promise<ProductReviewEligibility> {
+  return request(`/products/${id}/reviews/eligibility`);
+}
+
+export function createProductReview(
+  id: string | number,
+  payload: { orderId: number; rating: number; comment?: string; image_urls?: string[] },
+): Promise<{ message: string; review: ProductReview }> {
+  return request(`/products/${id}/reviews`, 'POST', payload);
+}
+
+export function updateProductReview(
+  productId: string | number,
+  reviewId: number,
+  payload: { rating: number; comment: string; image_urls?: string[] },
+): Promise<{ message: string; review: ProductReview }> {
+  return request(`/products/${productId}/reviews/${reviewId}`, 'PATCH', payload);
+}
+
+export function deleteProductReview(productId: string | number, reviewId: number): Promise<{ message: string }> {
+  return request(`/products/${productId}/reviews/${reviewId}`, 'DELETE');
 }
 
 export function createProduct(payload: CreateProductPayload): Promise<Product> {

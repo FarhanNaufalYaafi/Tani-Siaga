@@ -7,6 +7,16 @@ export interface Shop {
   description: string;
   location: string;
   phone_number: string;
+  profile_image_url?: string | null;
+  is_active?: boolean;
+  approval_status?: 'pending' | 'approved' | 'rejected';
+  rejection_reason?: string | null;
+  warning_reason?: string | null;
+  warning_at?: string | null;
+  warning_evidence_urls?: string[];
+  ban_reason?: string | null;
+  ban_evidence_urls?: string[];
+  banned_until?: string | null;
   created_at: string;
 }
 
@@ -23,6 +33,8 @@ export interface PublicShopProduct {
   estimated_harvest_date?: string | null;
   sold_quantity: number;
   completed_orders: number;
+  rating_average: number;
+  rating_count: number;
   booked_percentage: number | null;
 }
 
@@ -46,6 +58,7 @@ export interface CreateShopPayload {
   description: string;
   location: string;
   phone_number: string;
+  profile_image_url?: string;
 }
 
 export interface MyProductsResponse {
@@ -58,6 +71,11 @@ export interface MyProductsResponse {
     description: string;
     image_url: string[];
     is_pre_order: boolean;
+    is_active?: boolean;
+    approval_status?: 'pending' | 'approved' | 'rejected';
+    admin_action?: 'disabled' | 'deleted' | null;
+    admin_action_reason?: string | null;
+    admin_action_at?: string | null;
     farmland_id?: number | null;
     estimated_harvest_date?: string | null;
     po_quota_kg: number;
@@ -87,6 +105,10 @@ export function getMyShop(): Promise<ShopResponse> {
 
 export function createShop(payload: CreateShopPayload): Promise<Shop> {
   return request<Shop>('/shop', 'POST', payload);
+}
+
+export function updateMyShopProfileImage(profile_image_url: string): Promise<Shop> {
+  return request<Shop>('/shop/me/profile-image', 'PATCH', { profile_image_url });
 }
 
 export function getMyShopProducts(): Promise<MyProductsResponse> {

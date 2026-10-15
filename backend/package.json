@@ -37,8 +37,10 @@
     "axios": "^1.20.0",
     "bcryptjs": "^3.0.3",
     "cache-manager": "^7.2.9",
+    "cheerio": "^1.2.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
+    "cloudinary": "^2.11.0",
     "cookie-parser": "^1.4.7",
     "cookie-session": "^2.1.1",
     "cors": "^2.8.6",
@@ -81,5 +83,26 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.7.3"
+  },
+  "jest": {
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
+    "rootDir": "src",
+    "testRegex": ".*\\.spec\\.ts$",
+    "transform": {
+      "^.+\\.ts$": [
+        "ts-jest",
+        {
+          "tsconfig": {
+            "module": "Node16",
+            "moduleResolution": "Node16"
+          }
+        }
+      ]
+    },
+    "testEnvironment": "node"
   }
 }

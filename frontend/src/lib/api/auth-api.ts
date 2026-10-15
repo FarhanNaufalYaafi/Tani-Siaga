@@ -18,6 +18,7 @@ export interface CurrentUserDto {
   id?: number | string;
   userId?: number | string;
   email: string;
+  profile_image_url?: string | null;
   role?: string;
   farmer_group_id?: number | null;
   group_status?: string;
@@ -29,6 +30,7 @@ export interface CurrentUserDto {
 
 export interface UpdateUserPayload {
   email?: string;
+  profile_image_url?: string | null;
 }
 
 export interface PasswordResetPayload {

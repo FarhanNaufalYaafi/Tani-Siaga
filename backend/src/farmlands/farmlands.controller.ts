@@ -19,7 +19,7 @@ export class FarmlandsController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles('user', 'group_leader', 'individual_farmer')
+  @Roles('user', 'farmer', 'group_leader', 'individual_farmer')
   async create(@Req() req: any, @Body() dto: CreateFarmlandDto) {
     const userId = req.user.userId;
     return await this.farmlandsService.create(userId, dto);
@@ -80,7 +80,7 @@ export class FarmlandsController {
   @Post(':id/replant')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles('individual_farmer', 'group_leader')
+  @Roles('farmer', 'individual_farmer', 'group_leader')
   async replant(
     @Param('id', ParseIntPipe) farmlandId: number,
     @Req() req: any,

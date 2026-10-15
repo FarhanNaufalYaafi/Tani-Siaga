@@ -57,6 +57,12 @@ export class Order {
     @Column()
     total_price!: number
 
+    @Column({ name: 'payment_amount', type: 'int', nullable: true })
+    payment_amount!: number | null;
+
+    @Column({ name: 'preorder_deposit_amount', type: 'int', nullable: true })
+    preorder_deposit_amount!: number | null;
+
     @Column({ default: false })
     buyer_confirmed!: boolean
 

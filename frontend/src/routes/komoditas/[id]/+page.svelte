@@ -17,7 +17,168 @@
 </script>
 
 <svelte:head><title>{commodity ? `${commodity.name} | Komoditas` : 'Detail Komoditas'}</title></svelte:head>
-<div class="page-shell"><div class="page-container"><a class="back-link" href="/komoditas">← Kembali ke Komoditas</a>{#if isLoading}<div class="state">Memuat detail komoditas...</div>{:else if errorMessage && !commodity}<div class="state error">{errorMessage}</div>{:else if commodity}<article class="detail-card"><div class="header"><div><p class="eyebrow">DETAIL KOMODITAS</p><h1>{commodity.name}</h1><p class="subtitle">{commodity.variety || 'Varietas umum'}</p></div><span class="crop-icon">🌱</span></div>{#if notice}<div class="notice">{notice}</div>{/if}{#if errorMessage}<div class="alert">{errorMessage}</div>{/if}{#if isEditing}<form class="edit-form" onsubmit={(event) => { event.preventDefault(); void save(); }}><div class="form-grid"><label>Nama komoditas<input bind:value={form.name} required /></label><label>Varietas<input bind:value={form.variety} /></label><label>Rata-rata hari panen<input type="number" min="1" bind:value={form.avg_harvest_days} required /></label><label>Kelembapan maksimum (%)<input type="number" min="0" max="100" step="0.1" bind:value={form.max_humidity_percentage} required /></label><label>Suhu maksimum (°C)<input type="number" step="0.1" bind:value={form.max_temp_celsius} required /></label><label>Suhu minimum (°C)<input type="number" step="0.1" bind:value={form.min_temp_celsius} required /></label></div><div class="actions"><button class="quiet" type="button" onclick={() => (isEditing = false)}>Batal</button><button type="submit" disabled={isSaving}>{isSaving ? 'Menerapkan...' : 'Terapkan perubahan'}</button></div></form>{:else}<div class="facts"><div><span>Rata-rata panen</span><strong>{commodity.avg_harvest_days} hari</strong></div><div><span>Suhu ideal</span><strong>{commodity.min_temp_celsius}–{commodity.max_temp_celsius}°C</strong></div><div><span>Kelembapan maksimum</span><strong>{commodity.max_humidity_percentage}%</strong></div></div>{#if isAdmin}<div class="actions"><button type="button" onclick={() => (isEditing = true)}>Ubah data</button><button class="danger" type="button" onclick={remove}>Hapus komoditas</button></div>{/if}{/if}</article>{/if}</div></div>
+<div class="kerangka-halaman"><div class="wadah-halaman"><a class="tautan-kembali" href="/komoditas">← Kembali ke Komoditas</a>{#if isLoading}<div class="keadaan">Memuat detail komoditas...</div>{:else if errorMessage && !commodity}<div class="keadaan galat">{errorMessage}</div>{:else if commodity}<article class="kartu-rincian"><div class="bilah"><div><p class="label-kecil">DETAIL KOMODITAS</p><h1 class="judul">{commodity.name}</h1><p class="subjudul">{commodity.variety || 'Varietas umum'}</p></div><span class="ikon-tanaman">🌱</span></div>{#if notice}<div class="pesan-berhasil">{notice}</div>{/if}{#if errorMessage}<div class="pesan-galat">{errorMessage}</div>{/if}{#if isEditing}<form class="formulir-ubah" onsubmit={(event) => { event.preventDefault(); void save(); }}><div class="kisi-formulir"><label>Nama komoditas<input bind:value={form.name} required /></label><label>Varietas<input bind:value={form.variety} /></label><label>Rata-rata hari panen<input type="number" min="1" bind:value={form.avg_harvest_days} required /></label><label>Kelembapan maksimum (%)<input type="number" min="0" max="100" step="0.1" bind:value={form.max_humidity_percentage} required /></label><label>Suhu maksimum (°C)<input type="number" step="0.1" bind:value={form.max_temp_celsius} required /></label><label>Suhu minimum (°C)<input type="number" step="0.1" bind:value={form.min_temp_celsius} required /></label></div><div class="aksi"><button class="tenang" type="button" onclick={() => (isEditing = false)}>Batal</button><button type="submit" disabled={isSaving}>{isSaving ? 'Menerapkan...' : 'Terapkan perubahan'}</button></div></form>{:else}<div class="fakta"><div><span>Rata-rata panen</span><strong>{commodity.avg_harvest_days} hari</strong></div><div><span>Suhu ideal</span><strong>{commodity.min_temp_celsius}–{commodity.max_temp_celsius}°C</strong></div><div><span>Kelembapan maksimum</span><strong>{commodity.max_humidity_percentage}%</strong></div></div>{#if isAdmin}<div class="aksi"><button type="button" onclick={() => (isEditing = true)}>Ubah data</button><button class="bahaya" type="button" onclick={remove}>Hapus komoditas</button></div>{/if}{/if}</article>{/if}</div></div>
 <style>
-	.page-shell{min-height:100vh;background:#f4f7f1;color:#183126;padding:36px 20px 68px}.page-container{max-width:780px;margin:auto}.back-link{display:inline-block;margin-bottom:28px;color:#39754b;font-size:13px;font-weight:700;text-decoration:none}.detail-card,.state{border:1px solid #d6e1d5;border-radius:10px;background:#fff;padding:28px;box-shadow:0 8px 22px #23472e0a}.header{display:flex;justify-content:space-between;gap:20px;border-bottom:1px solid #e8eee6;padding-bottom:22px}.eyebrow{margin:0 0 9px;color:#4e805a;font-size:11px;font-weight:800;letter-spacing:.14em}.header h1{margin:0;font-size:clamp(38px,6vw,56px);line-height:1.02}.subtitle{color:#718077}.crop-icon{display:grid;place-items:center;width:58px;height:58px;border-radius:50%;background:#eaf4e9;font-size:29px}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:24px 0}.facts div{padding:16px;border-radius:8px;background:#f7faf6}.facts span{display:block;color:#718077;font-size:12px}.facts strong{display:block;margin-top:8px;color:#39754b;font-size:17px}.actions{display:flex;justify-content:flex-end;gap:10px;border-top:1px solid #e8eee6;padding-top:20px}.actions button{border:1px solid #39754b;border-radius:7px;padding:11px 14px;background:#39754b;color:#fff;font:700 13px inherit;cursor:pointer}.actions .quiet{border-color:#d6e1d5;background:#fff;color:#39754b}.actions .danger{border-color:#f0c9c5;background:#fff0ef;color:#a44242}.edit-form{padding-top:22px}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}label{display:grid;gap:8px;color:#385540;font-size:13px;font-weight:700}input{box-sizing:border-box;width:100%;border:1px solid #d6e1d5;border-radius:7px;padding:12px;background:#fbfdfb;color:#183126;font:inherit;outline:0}.notice,.alert{margin-top:18px;padding:12px;border-radius:7px;font-size:13px}.notice{background:#edf8ed;color:#39754b}.alert{background:#fff0ef;color:#a44242}.state{text-align:center;color:#718077}.state.error{color:#a44242}@media(max-width:600px){.facts,.form-grid{grid-template-columns:1fr}.header{align-items:start}.actions{flex-wrap:wrap}}
+	.kerangka-halaman {
+		min-height: 100vh;
+		background: #f4f7f1;
+		color: #183126;
+		padding: 36px 20px 68px;
+	}
+	.wadah-halaman {
+		max-width: 780px;
+		margin: auto;
+	}
+	.tautan-kembali {
+		display: inline-block;
+		margin-bottom: 28px;
+		color: #39754b;
+		font-size: 13px;
+		font-weight: 700;
+		text-decoration: none;
+	}
+	.kartu-rincian,.keadaan {
+		border: 1px solid #d6e1d5;
+		border-radius: 10px;
+		background: #fff;
+		padding: 28px;
+		box-shadow: 0 8px 22px #23472e0a;
+	}
+	.bilah {
+		display: flex;
+		justify-content: space-between;
+		gap: 20px;
+		border-bottom: 1px solid #e8eee6;
+		padding-bottom: 22px;
+	}
+	.label-kecil {
+		margin: 0 0 9px;
+		color: #4e805a;
+		font-size: 11px;
+		font-weight: 800;
+		letter-spacing: .14em;
+	}
+	.bilah h1 {
+		margin: 0;
+		font-size: clamp(38px,6vw,56px);
+		line-height: 1.02;
+	}
+	.subjudul {
+		color: #718077;
+	}
+	.ikon-tanaman {
+		display: grid;
+		place-items: center;
+		width: 58px;
+		height: 58px;
+		border-radius: 50%;
+		background: #eaf4e9;
+		font-size: 29px;
+	}
+	.fakta {
+		display: grid;
+		grid-template-columns: repeat(3,1fr);
+		gap: 12px;
+		padding: 24px 0;
+	}
+	.fakta div {
+		padding: 16px;
+		border-radius: 8px;
+		background: #f7faf6;
+	}
+	.fakta span {
+		display: block;
+		color: #718077;
+		font-size: 12px;
+	}
+	.fakta strong {
+		display: block;
+		margin-top: 8px;
+		color: #39754b;
+		font-size: 17px;
+	}
+	.aksi {
+		display: flex;
+		justify-content: flex-end;
+		gap: 10px;
+		border-top: 1px solid #e8eee6;
+		padding-top: 20px;
+	}
+	.aksi button {
+		border: 1px solid #39754b;
+		border-radius: 7px;
+		padding: 11px 14px;
+		background: #39754b;
+		color: #fff;
+		font: 700 13px inherit;
+		cursor: pointer;
+	}
+	.aksi .tenang {
+		border-color: #d6e1d5;
+		background: #fff;
+		color: #39754b;
+	}
+	.aksi .bahaya {
+		border-color: #f0c9c5;
+		background: #fff0ef;
+		color: #a44242;
+	}
+	.formulir-ubah {
+		padding-top: 22px;
+	}
+	.kisi-formulir {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 18px;
+	}
+	label {
+		display: grid;
+		gap: 8px;
+		color: #385540;
+		font-size: 13px;
+		font-weight: 700;
+	}
+	input {
+		box-sizing: border-box;
+		width: 100%;
+		border: 1px solid #d6e1d5;
+		border-radius: 7px;
+		padding: 12px;
+		background: #fbfdfb;
+		color: #183126;
+		font: inherit;
+		outline: 0;
+	}
+	.pesan-berhasil,.pesan-galat {
+		margin-top: 18px;
+		padding: 12px;
+		border-radius: 7px;
+		font-size: 13px;
+	}
+	.pesan-berhasil {
+		background: #edf8ed;
+		color: #39754b;
+	}
+	.pesan-galat {
+		background: #fff0ef;
+		color: #a44242;
+	}
+	.keadaan {
+		text-align: center;
+		color: #718077;
+	}
+	.keadaan.galat {
+		color: #a44242;
+	}
+	@media (max-width:600px) {
+		.fakta,.kisi-formulir {
+			grid-template-columns: 1fr;
+		}
+		.bilah {
+			align-items: start;
+		}
+		.aksi {
+			flex-wrap: wrap;
+		}
+	}
 </style>

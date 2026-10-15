@@ -29,6 +29,16 @@ export class OrderController {
     return await this.orderService.reviewOrder(req.user.userId, cartItemId);
   }
 
+  @UseGuards(JwtGuard)
+  @Post('review/buy-now/:productId')
+  async reviewBuyNow(
+    @Req() req: any,
+    @Param('productId', ParseIntPipe) productId: number,
+    @Body() dto: { quantity?: number },
+  ) {
+    return this.orderService.reviewBuyNow(req.user.userId, productId, Number(dto.quantity));
+  }
+
                                                                                                                
   @UseGuards(JwtGuard)
   @Post('payment/:cartItemId')
@@ -38,6 +48,16 @@ export class OrderController {
     @Body() dto: CreateOrderDto,
   ) {
     return await this.orderService.payment(req.user.userId, cartItemId, dto);
+  }
+
+  @UseGuards(JwtGuard)
+  @Post('buy-now/:productId')
+  async buyNow(
+    @Req() req: any,
+    @Param('productId', ParseIntPipe) productId: number,
+    @Body() dto: CreateOrderDto,
+  ) {
+    return this.orderService.buyNow(req.user.userId, productId, dto);
   }
 
                                                                                      
@@ -97,6 +117,15 @@ export class OrderController {
     @Param('id', ParseIntPipe) orderId: number,
   ) {
     return await this.orderService.confirmOrder(req.user.userId, orderId);
+  }
+
+  @UseGuards(JwtGuard)
+  @Post(':id/cancel-direct')
+  async cancelDirectContactOrder(
+    @Req() req: any,
+    @Param('id', ParseIntPipe) orderId: number,
+  ) {
+    return this.orderService.cancelDirectContactOrderBySeller(req.user.userId, orderId);
   }
 
   @UseGuards(JwtGuard)

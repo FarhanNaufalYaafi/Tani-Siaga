@@ -1,4 +1,4 @@
-import { IsEnum, IsNotEmpty, IsString } from 'class-validator';
+import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
 import { ShippingMethod } from '../enum/shipping-method.enum';
 
 export class CreateOrderDto {
@@ -18,4 +18,9 @@ export class CreateOrderDto {
   @IsEnum(ShippingMethod, { message: 'Metode pengiriman tidak valid' })
   @IsNotEmpty()
   shipping_method!: ShippingMethod;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  quantity?: number;
 }

@@ -1,13 +1,17 @@
-import { BadRequestException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { orderStatus } from './enum/order-status.enum';
 import { Product } from '../product/entities/product.entity';
+import { ProductReview } from '../product/entities/product-review.entity';
 import { Order } from './entities/order.entity';
 import { CartItems } from '../cart_items/entities/cart_items.entity';
 import { OrderItems } from '../order_items/entities/order_items.entity';
 import { CreateOrderDto } from './dtos/create-order.dto';
 import { randomUUID } from 'crypto';
-import { DataSource, Repository } from 'typeorm';
+import axios from 'axios';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
+import { LessThanOrEqual } from 'typeorm';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { UserService } from 'src/user/user.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as midtransClient from 'midtrans-client';
@@ -23,6 +27,7 @@ export class OrderService {
   private coreApi: any;
   private readonly isProduction: boolean;
   private readonly frontendUrl: string;
+  private readonly midtransServerKey: string;
 
   constructor(
     private readonly dataSource: DataSource,
@@ -31,12 +36,14 @@ export class OrderService {
     @InjectRepository(Order) private orderRepo: Repository<Order>,
     @InjectRepository(Product) private prodRepo: Repository<Product>,
     @InjectRepository(BookedOrder) private bookedOrderRepo: Repository<BookedOrder>,
+    @InjectRepository(ProductReview) private productReviewRepo: Repository<ProductReview>,
     private readonly notificationService: NotificationService,
   ) {
     this.isProduction = this.configService.get<string>('MIDTRANS_IS_PRODUCTION', 'false') === 'true';
     this.frontendUrl = (this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173').replace(/\/+$/, '');
     const serverKey = this.configService.get<string>('MIDTRANS_SERVER_KEY')!;
     const clientKey = this.configService.get<string>('MIDTRANS_CLIENT_KEY')!;
+    this.midtransServerKey = serverKey;
 
     if (!serverKey || !clientKey) {
       this.logger.error('MIDTRANS_SERVER_KEY atau MIDTRANS_CLIENT_KEY tidak diatur di environment!');
@@ -81,12 +88,36 @@ export class OrderService {
   }
 
   const shop = cartItem.product.shop;
+  if (!shop?.is_active || (shop.banned_until && new Date(shop.banned_until) > new Date())) {
+    throw new BadRequestException('Toko sedang tidak dapat menerima transaksi.');
+  }
+  if (!cartItem.product.is_active || cartItem.product.approval_status !== 'approved') {
+    throw new BadRequestException('Produk belum tersedia untuk transaksi.');
+  }
+  const availableQuantity = cartItem.product.is_pre_order
+    ? Math.max(0, cartItem.product.po_quota_kg - cartItem.product.po_booked_kg)
+    : Math.max(0, cartItem.product.stock - cartItem.product.po_booked_kg);
+  if (availableQuantity < 1) {
+    await this.dataSource.manager.delete(CartItems, { id: cartItem.id });
+    throw new BadRequestException(`Stok ${cartItem.product.name} habis. Item otomatis dihapus dari keranjang.`);
+  }
+  if (cartItem.quantity > availableQuantity) {
+    cartItem.quantity = availableQuantity;
+    cartItem.total_price = availableQuantity * Number(cartItem.product.price);
+    await this.dataSource.manager.save(CartItems, cartItem);
+  }
   const sellerUserId = (shop?.user as any)?.id;
   if (sellerUserId !== undefined && sellerUserId === userId) {
     throw new BadRequestException(
       `Anda tidak bisa membeli produk sendiri (produk "${cartItem.product.name}" dari toko "${shop?.name}").`,
     );
   }
+
+  const isPreOrder = cartItem.product.is_pre_order;
+  if (isPreOrder && cartItem.total_price < 2) {
+    throw new BadRequestException('Total pre-order terlalu kecil untuk dibagi menjadi DP dan pelunasan.');
+  }
+  const depositAmount = isPreOrder ? Math.max(1, Math.min(Number(cartItem.total_price) - 1, Math.round(Number(cartItem.total_price) * 0.3))) : null;
 
   return {
     message: 'Data checkout berhasil dimuat',
@@ -97,7 +128,10 @@ export class OrderService {
       address: (user as any).address || '',
     },
     // 2. Daftar Opsi Pengiriman yang Tersedia
-    available_shipping_methods: Object.values(ShippingMethod),
+    available_shipping_methods: isPreOrder ? [ShippingMethod.PICKUP] : Object.values(ShippingMethod),
+    preorder_payment: isPreOrder && depositAmount !== null
+      ? { total_amount: Number(cartItem.total_price), deposit_amount: depositAmount, remaining_amount: Number(cartItem.total_price) - depositAmount }
+      : null,
     // 3. Info Toko Penjual
     shop_info: {
       shop_name: shop?.name || 'Toko Tani',
@@ -120,10 +154,143 @@ export class OrderService {
     total_pembayaran: cartItem.total_price,
   };
 }
+
+  private async notifyBuyerReviewReminder(userId: number, orderId: number, productId: number, productName: string) {
+    const existingReview = await this.productReviewRepo.findOne({ where: { userId, productId } });
+    const hasReview = Boolean(existingReview);
+    await this.notificationService.createInAppNotification({
+      userId,
+      title: hasReview ? 'Perbarui ulasan?' : 'Berikan ulasan produk',
+      message: hasReview
+        ? `Pesanan "${productName}" selesai lagi. Perbarui ulasan Anda?`
+        : `Pesanan "${productName}" sudah selesai. Berikan ulasan Anda untuk produk ini.`,
+      type: 'product_review_reminder',
+      severity: 'safe',
+      targetUrl: `/e-commerce/${productId}#ulasan-pembeli`,
+      metadata: { orderId, productId },
+    });
+  }
+
+  async reviewBuyNow(userId: number, productId: number, quantity: number) {
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      throw new BadRequestException('Jumlah produk minimal 1 dan harus berupa bilangan bulat.');
+    }
+
+    const user = await this.userService.findOneId(userId);
+    if (!user) throw new UnauthorizedException('User tidak ditemukan');
+    const product = await this.prodRepo.findOne({
+      where: { id: productId },
+      relations: { shop: { user: true } },
+    });
+    if (!product || !product.is_active || product.approval_status !== 'approved') {
+      throw new NotFoundException('Produk sudah tidak tersedia.');
+    }
+
+    const shop = product.shop;
+    if (!shop?.is_active || (shop.banned_until && new Date(shop.banned_until) > new Date())) {
+      throw new BadRequestException('Toko sedang tidak dapat menerima transaksi.');
+    }
+    if ((shop.user as any)?.id === userId) {
+      throw new BadRequestException(`Anda tidak bisa membeli produk sendiri (produk "${product.name}").`);
+    }
+
+    const availableQuantity = product.is_pre_order
+      ? Math.max(0, product.po_quota_kg - product.po_booked_kg)
+      : Math.max(0, product.stock - product.po_booked_kg);
+    if (quantity > availableQuantity) {
+      throw new BadRequestException(`Jumlah melebihi ketersediaan. Maksimal ${availableQuantity}.`);
+    }
+
+    const totalPrice = quantity * Number(product.price);
+    if (product.is_pre_order && totalPrice < 2) {
+      throw new BadRequestException('Total pre-order terlalu kecil untuk dibagi menjadi DP dan pelunasan.');
+    }
+    const depositAmount = product.is_pre_order
+      ? Math.max(1, Math.min(totalPrice - 1, Math.round(totalPrice * 0.3)))
+      : null;
+
+    return {
+      message: 'Data checkout berhasil dimuat',
+      shipping_address: {
+        recipient_name: (user as any).name || (user as any).full_name || '',
+        phone_number: (user as any).phone_number || '',
+        address: (user as any).address || '',
+      },
+      available_shipping_methods: product.is_pre_order ? [ShippingMethod.PICKUP] : Object.values(ShippingMethod),
+      preorder_payment: product.is_pre_order && depositAmount !== null
+        ? { total_amount: totalPrice, deposit_amount: depositAmount, remaining_amount: totalPrice - depositAmount }
+        : null,
+      shop_info: {
+        shop_name: shop?.name || 'Toko Tani',
+        address: shop?.location || 'Alamat tidak tersedia',
+        phone_number: shop?.phone_number || '-',
+      },
+      item: {
+        cart_item_id: 0,
+        product_id: product.id,
+        name: product.name,
+        price: product.price,
+        quantity,
+        total_price: totalPrice,
+        is_pre_order: product.is_pre_order,
+        estimated_harvest_date: product.estimated_harvest_date,
+        image_url: product.image_url?.[0] || '',
+      },
+      subtotal_produk: totalPrice,
+      total_pembayaran: totalPrice,
+    };
+  }
+
+  async buyNow(userId: number, productId: number, dto: CreateOrderDto) {
+    const quantity = Number(dto.quantity);
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      throw new BadRequestException('Jumlah produk minimal 1 dan harus berupa bilangan bulat.');
+    }
+    return this.payment(userId, null, dto, { productId, quantity });
+  }
   // =========================================================================
   // 2. CREATE ORDER & PAY (Menerima Alamat & Kontak Langsung dari DTO)
   // =========================================================================
-  async payment(userId: number, cartItemId: number, dto: CreateOrderDto) {
+  private async createPreorderDepositOrder(
+    manager: EntityManager,
+    booking: BookedOrder,
+    product: Product,
+    midtransOrderId: string,
+  ) {
+    const existingOrder = await manager.findOne(Order, { where: { midtransOrderId } });
+    if (existingOrder) return existingOrder;
+
+    const order = await manager.save(Order, manager.create(Order, {
+      user: { id: booking.userId },
+      status: orderStatus.PENDING,
+      total_price: booking.totalPrice,
+      payment_amount: booking.depositAmount,
+      preorder_deposit_amount: booking.depositAmount,
+      recipient_name: booking.recipientName,
+      recipient_phone_number: booking.recipientPhoneNumber,
+      recipient_address: booking.recipientAddress,
+      shipping_method: ShippingMethod.PICKUP,
+      midtransOrderId,
+      buyer_confirmed: false,
+      seller_confirmed: false,
+    }));
+
+    await manager.save(OrderItems, manager.create(OrderItems, {
+      quantity: booking.quantity,
+      current_price: Math.round(booking.totalPrice / booking.quantity),
+      product: { id: product.id },
+      order: { id: order.id },
+    }));
+    booking.orderId = order.id;
+    return order;
+  }
+
+  async payment(
+    userId: number,
+    cartItemId: number | null,
+    dto: CreateOrderDto,
+    buyNow?: { productId: number; quantity: number },
+  ) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -135,21 +302,34 @@ export class OrderService {
       const randomId = randomUUID().replace(/-/g, '').slice(0, 5);
       const midtransOrderId = `O-${userId}-${Date.now()}-${randomId}`;
 
-      const cartItem = await queryRunner.manager.findOne(CartItems, {
-        where: {
-          id: cartItemId,
-          cart: { user: { id: userId } },
-        },
-        relations: {
-          product: { shop: { user: true } },
-        },
-      });
+      let cartItem: CartItems | null;
+      if (buyNow) {
+        const buyNowProduct = await queryRunner.manager.findOne(Product, {
+          where: { id: buyNow.productId },
+          relations: { shop: { user: true } },
+        });
+        cartItem = buyNowProduct
+          ? queryRunner.manager.create(CartItems, {
+              quantity: buyNow.quantity,
+              total_price: buyNow.quantity * Number(buyNowProduct.price),
+              product: buyNowProduct,
+            })
+          : null;
+      } else {
+        cartItem = await queryRunner.manager.findOne(CartItems, {
+          where: { id: cartItemId!, cart: { user: { id: userId } } },
+          relations: { product: { shop: { user: true } } },
+        });
+      }
 
       if (!cartItem) {
         throw new NotFoundException('Item keranjang tidak ditemukan');
       }
 
       const shop = cartItem.product.shop;
+      if (!shop?.is_active || (shop.banned_until && new Date(shop.banned_until) > new Date())) {
+        throw new BadRequestException('Toko sedang tidak dapat menerima transaksi.');
+      }
       const sellerUserId = (shop?.user as any)?.id;
       if (sellerUserId !== undefined && sellerUserId === userId) {
         throw new BadRequestException(
@@ -167,69 +347,111 @@ export class OrderService {
       if (!product) {
         throw new BadRequestException('Produk tidak ditemukan');
       }
-      if (!product.is_active) {
+      if (!product.is_active || product.approval_status !== 'approved') {
         throw new NotFoundException('Produk sudah tidak tersedia. Hapus produk ini dari keranjang.');
       }
 
-      // Validasi & Potong Kuota / Cek Stok
+      // Create the booking request; reserve quota only after Midtrans confirms the deposit.
       if (product.is_pre_order) {
-        const remainingQuota = (product.po_quota_kg || 0) - product.po_booked_kg;
-        if (cartItem.quantity > remainingQuota) {
-          throw new BadRequestException(
-            `Sisa kuota Pre-Order untuk "${product.name}" tidak mencukupi (Tersisa: ${remainingQuota} Kg).`,
-          );
+        if (dto.shipping_method !== ShippingMethod.PICKUP) {
+          throw new BadRequestException('Pre-order hanya menggunakan metode Pickup. Hubungi petani tersedia setelah produk menjadi ready stock.');
         }
-      } else {
-        const availableStock = Math.max(0, product.stock - product.po_booked_kg);
-        if (cartItem.quantity > availableStock) {
-          throw new BadRequestException(
-            `Stok untuk "${product.name}" tidak mencukupi (Tersisa: ${availableStock}).`,
-          );
+        if (cartItem.total_price < 2) {
+          throw new BadRequestException('Total pre-order terlalu kecil untuk dibagi menjadi DP dan pelunasan.');
         }
-      }
 
-      if (product.is_pre_order) {
-        const estimatedHarvestDate = product.estimated_harvest_date || null;
-        const expiresAt = estimatedHarvestDate ? new Date(estimatedHarvestDate) : null;
-        if (expiresAt) expiresAt.setDate(expiresAt.getDate() + 7);
+        const remainingQuota = Math.max(0, (product.po_quota_kg || 0) - product.po_booked_kg);
+        if (cartItem.quantity > remainingQuota) {
+          if (remainingQuota < 1 && !buyNow) {
+            await queryRunner.manager.delete(CartItems, { id: cartItem.id });
+            await queryRunner.commitTransaction();
+            throw new BadRequestException(`Kuota pre-order ${product.name} habis. Item otomatis dihapus dari keranjang.`);
+          }
+          throw new BadRequestException(`Sisa kuota Pre-Order untuk "${product.name}" tidak mencukupi (Tersisa: ${remainingQuota} Kg).`);
+        }
+
+        const totalPrice = Number(cartItem.total_price);
+        const depositAmount = Math.max(1, Math.min(totalPrice - 1, Math.round(totalPrice * 0.3)));
+        const remainingAmount = totalPrice - depositAmount;
+        const depositExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
         const bookedOrder = queryRunner.manager.create(BookedOrder, {
           userId,
           productId: product.id,
           quantity: cartItem.quantity,
-          totalPrice: cartItem.total_price,
+          totalPrice,
+          depositAmount,
+          remainingAmount,
+          depositStatus: 'pending',
+          depositMidtransOrderId: null,
+          depositMidtransTransactionId: null,
+          depositPaymentUrl: null,
+          depositExpiresAt,
+          balancePaymentUrl: null,
           recipientName: dto.recipient_name,
           recipientPhoneNumber: dto.recipient_phone_number,
           recipientAddress: dto.recipient_address,
-          shippingMethod: dto.shipping_method,
-          status: bookedOrderStatus.BOOKED,
-          estimatedHarvestDate,
-          expiresAt,
+          shippingMethod: ShippingMethod.PICKUP,
+          status: bookedOrderStatus.WAITING_DEPOSIT,
+          estimatedHarvestDate: product.estimated_harvest_date || null,
+          expiresAt: null,
         });
         const savedBookedOrder = await queryRunner.manager.save(BookedOrder, bookedOrder);
-        product.po_booked_kg += cartItem.quantity;
-        await queryRunner.manager.save(Product, product);
-        await queryRunner.manager.delete(CartItems, { id: cartItem.id });
+        const depositMidtransOrderId = `PO-DP-${savedBookedOrder.id}-${randomUUID().replace(/-/g, '').slice(0, 8)}`;
+
+        if (!buyNow) await queryRunner.manager.delete(CartItems, { id: cartItem.id });
+
+        const depositOrder = await this.createPreorderDepositOrder(
+          queryRunner.manager,
+          savedBookedOrder,
+          product,
+          depositMidtransOrderId,
+        );
+
+        const depositTransaction = await this.snap.createTransaction({
+          transaction_details: { order_id: depositMidtransOrderId, gross_amount: depositAmount },
+          item_details: [{
+            id: `deposit-${savedBookedOrder.id}`,
+            price: depositAmount,
+            quantity: 1,
+            name: `DP Pre-order 30% ${product.name}`.substring(0, 50),
+          }],
+          credit_card: { secure: true },
+          customer_details: {
+            first_name: dto.recipient_name,
+            email: user.email,
+            phone: dto.recipient_phone_number,
+          },
+          expiry: { unit: 'day', duration: 1 },
+          callbacks: { finish: `${this.frontendUrl}/pesanan/${depositOrder.id}` },
+        });
+
+        depositOrder.snap_redirect_url = depositTransaction.redirect_url;
+        await queryRunner.manager.save(Order, depositOrder);
+        savedBookedOrder.depositMidtransOrderId = depositMidtransOrderId;
+        savedBookedOrder.depositPaymentUrl = depositTransaction.redirect_url;
+        await queryRunner.manager.save(BookedOrder, savedBookedOrder);
         await queryRunner.commitTransaction();
 
-        const bookedSellerUserId = (cartItem.product.shop as any)?.user?.id;
-        if (bookedSellerUserId) {
-          await this.notificationService.createInAppNotification({
-            userId: bookedSellerUserId,
-            title: 'Pre-order baru masuk',
-            message: `Ada pre-order baru untuk produk ${cartItem.product.name}.`,
-            type: 'preorder_booked',
-            severity: 'warning',
-            targetUrl: '/toko/pesanan',
-            metadata: { bookedOrderId: savedBookedOrder.id },
-          });
-        }
-
         return {
-          message: 'Pre-order berhasil dicatat. Pembayaran dibuat setelah panen dan konfirmasi Anda.',
+          message: 'Booking pre-order dibuat. Selesaikan DP 30% agar kuota terkunci.',
           bookedOrderId: savedBookedOrder.id,
-          orderId: null,
-          paymentURL: null,
+          orderId: depositOrder.id,
+          paymentURL: depositTransaction.redirect_url,
+          paymentToken: depositTransaction.token,
+          totalPrice,
+          depositAmount,
+          remainingAmount,
         };
+      }
+
+      const availableStock = Math.max(0, product.stock - product.po_booked_kg);
+      if (cartItem.quantity > availableStock) {
+        if (availableStock < 1 && !buyNow) {
+          await queryRunner.manager.delete(CartItems, { id: cartItem.id });
+          await queryRunner.commitTransaction();
+          throw new BadRequestException(`Stok ${product.name} habis. Item otomatis dihapus dari keranjang.`);
+        }
+        throw new BadRequestException(`Stok untuk "${product.name}" tidak mencukupi (Tersisa: ${availableStock}).`);
       }
 
       // Buat Order Utama dengan Menggunakan Data Penerima dari DTO
@@ -260,7 +482,7 @@ export class OrderService {
 
       // Item sudah berubah menjadi pesanan; keluarkan dari cart segera agar
       // tidak bisa dibayar ulang dari keranjang yang sama.
-      await queryRunner.manager.delete(CartItems, { id: cartItem.id });
+      if (!buyNow) await queryRunner.manager.delete(CartItems, { id: cartItem.id });
 
       if (dto.shipping_method === ShippingMethod.DIRECT_CONTACT) {
         product.is_pre_order
@@ -268,6 +490,7 @@ export class OrderService {
           : (product.stock = Math.max(0, product.stock - cartItem.quantity));
         await queryRunner.manager.save(Product, product);
         await queryRunner.commitTransaction();
+        await this.notifyBuyerReviewReminder(userId, saveOrder.id, product.id, product.name);
         return {
           message: 'Pesanan dicatat sebagai transaksi langsung. Silakan hubungi petani.',
           orderId: saveOrder.id,
@@ -461,6 +684,8 @@ export class OrderService {
       data: orders.map((order) => ({
         order_id: order.id,
         midtrans_order_id: order.midtransOrderId,
+        is_preorder_order: order.midtransOrderId.startsWith('PO-DP-') || order.midtransOrderId.startsWith('PO-BAL-'),
+        is_preorder_deposit: order.midtransOrderId.startsWith('PO-DP-'),
         status: order.status,
         total_price: order.total_price,
         recipient_name: order.recipient_name,
@@ -508,6 +733,8 @@ export class OrderService {
     if (!isBuyer && !isSeller) throw new UnauthorizedException('Anda tidak terkait dengan pesanan ini');
 
     const shop = order.orderItems[0]?.product?.shop;
+    const isPreorderOrder = order.midtransOrderId.startsWith('PO-DP-') || order.midtransOrderId.startsWith('PO-BAL-');
+    const isPreorderDeposit = order.midtransOrderId.startsWith('PO-DP-');
 
     let formattedPhone = shop?.phone_number || '';
     if (formattedPhone.startsWith('0')) {
@@ -517,7 +744,7 @@ export class OrderService {
     const waText = encodeURIComponent(
       `Halo ${shop?.name || 'Toko'}, saya ingin menanyakan pengiriman untuk Order ID #${order.midtransOrderId}.`,
     );
-    const waLink = `https://wa.me/${formattedPhone}?text=${waText}`;
+    const waLink = isPreorderOrder ? '' : `https://wa.me/${formattedPhone}?text=${waText}`;
 
     let midtransPaymentUrl: string | null = null;
     if (order.status === orderStatus.PENDING) {
@@ -529,6 +756,10 @@ export class OrderService {
       midtrans_order_id: order.midtransOrderId,
       status: order.status,
       total_price: order.total_price,
+      payment_amount: order.payment_amount,
+      preorder_deposit_amount: order.preorder_deposit_amount,
+      is_preorder_order: isPreorderOrder,
+      is_preorder_deposit: isPreorderDeposit,
       payment_url: midtransPaymentUrl,
       shipping_info: {
         recipient_name: order.recipient_name,
@@ -545,6 +776,7 @@ export class OrderService {
           'Tani Siaga menyediakan opsi Ambil di Tempat sebagai metode utama. Transaksi, kesepakatan ongkir, dan pengiriman via WhatsApp di luar sistem platform sepenuhnya menjadi tanggung jawab antara Pembeli dan Toko.',
       },
       items: order.orderItems.map((item) => ({
+        product_id: item.product.id,
         product_name: item.product.name,
         quantity: item.quantity,
         price: item.current_price,
@@ -553,8 +785,8 @@ export class OrderService {
       })),
       buyer_confirmed: order.buyer_confirmed,
       seller_confirmed: order.seller_confirmed,
-      can_confirm_buyer: isBuyer && order.status === orderStatus.PAID,
-      can_confirm_seller: isSeller && order.status === orderStatus.PAID,
+      can_confirm_buyer: !isPreorderDeposit && isBuyer && order.status === orderStatus.PAID,
+      can_confirm_seller: !isPreorderDeposit && isSeller && order.status === orderStatus.PAID,
     };
   }
 
@@ -678,7 +910,9 @@ export class OrderService {
       if (!freshOrder.midtransTransactionId && transactionId) {
         freshOrder.midtransTransactionId = transactionId;
       }
-      return await this.orderRepo.save(freshOrder);
+      const savedOrder = await this.orderRepo.save(freshOrder);
+      await this.updateBookedOrderAfterBalance(savedOrder.id, nextStatus);
+      return savedOrder;
     } catch (error: any) {
       const httpCode = error?.httpStatusCode || error?.statusCode || 'N/A';
       const apiResponse = error?.ApiResponse ? JSON.stringify(error.ApiResponse) : error?.message;
@@ -721,17 +955,44 @@ export class OrderService {
     }
   }
 
+  private async updateBookedOrderAfterBalance(orderId: number, status: orderStatus) {
+    const bookedOrder = await this.bookedOrderRepo.findOne({ where: { orderId } });
+    if (!bookedOrder || bookedOrder.status !== bookedOrderStatus.PAYMENT_CREATED) return;
+
+    if (status === orderStatus.PAID) {
+      bookedOrder.status = bookedOrderStatus.COMPLETED;
+      bookedOrder.balancePaymentUrl = null;
+    } else if (status === orderStatus.CANCEL) {
+      bookedOrder.status = bookedOrderStatus.HARVESTED;
+      bookedOrder.orderId = null;
+      bookedOrder.balancePaymentUrl = null;
+    } else {
+      return;
+    }
+    await this.bookedOrderRepo.save(bookedOrder);
+  }
+
   async confirmOrder(userId: number, orderId: number) {
     const order = await this.orderRepo.findOne({
       where: { id: orderId },
       relations: { user: true, orderItems: { product: { shop: { user: true } } } },
     });
     if (!order) throw new NotFoundException('Pesanan tidak ditemukan');
+    const wasCompleted = order.status === orderStatus.COMPLETED;
 
     const isBuyer = order.user.id === userId;
     const sellerId = order.orderItems[0]?.product?.shop?.user?.id;
     const isSeller = sellerId === userId;
     if (!isBuyer && !isSeller) throw new UnauthorizedException('Anda tidak terkait dengan pesanan ini');
+    if (order.status === orderStatus.CANCEL) throw new BadRequestException('Pesanan yang sudah dibatalkan tidak dapat dikonfirmasi kembali.');
+    if (order.midtransOrderId.startsWith('PO-DP-')) {
+      throw new BadRequestException('Konfirmasi pre-order dilakukan melalui halaman Pre-order Saya.');
+    }
+
+    const sellerShop = order.orderItems[0]?.product?.shop;
+    if (isSeller && sellerShop?.banned_until && new Date(sellerShop.banned_until) > new Date()) {
+      throw new ForbiddenException(`Toko sedang dinonaktifkan sampai ${new Date(sellerShop.banned_until).toLocaleDateString('id-ID')}. Konfirmasi pesanan tidak tersedia selama masa sanksi.`);
+    }
 
     if (order.shipping_method === ShippingMethod.DIRECT_CONTACT) {
       order.buyer_confirmed = true;
@@ -747,6 +1008,17 @@ export class OrderService {
 
     if (order.buyer_confirmed && order.seller_confirmed) order.status = orderStatus.COMPLETED;
     await this.orderRepo.save(order);
+    if (order.status === orderStatus.COMPLETED) {
+      await this.bookedOrderRepo.update(
+        { orderId: order.id, status: bookedOrderStatus.PAYMENT_CREATED },
+        { status: bookedOrderStatus.COMPLETED },
+      );
+      if (!wasCompleted && order.orderItems.length) {
+        for (const item of order.orderItems) {
+          await this.notifyBuyerReviewReminder(order.user.id, order.id, item.product.id, item.product.name);
+        }
+      }
+    }
     const otherUserId = isBuyer ? sellerId : order.user.id;
     if (otherUserId) {
       await this.notificationService.createInAppNotification({
@@ -762,30 +1034,436 @@ export class OrderService {
     return { message: 'Konfirmasi pesanan berhasil disimpan', status: order.status, buyer_confirmed: order.buyer_confirmed, seller_confirmed: order.seller_confirmed };
   }
 
+  async cancelDirectContactOrderBySeller(userId: number, orderId: number) {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    let buyerId: number | null = null;
+    try {
+      const order = await queryRunner.manager.findOne(Order, {
+        where: { id: orderId },
+        relations: { user: true, orderItems: { product: { shop: { user: true } } } },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!order) throw new NotFoundException('Pesanan tidak ditemukan.');
+      if (order.shipping_method !== ShippingMethod.DIRECT_CONTACT || order.status !== orderStatus.COMPLETED) {
+        throw new BadRequestException('Hanya transaksi Hubungi petani yang sudah tercatat yang dapat dibatalkan oleh toko.');
+      }
+      if (!order.orderItems.length || order.orderItems.some((item) => item.product.is_pre_order)) {
+        throw new BadRequestException('Pembatalan ini hanya tersedia untuk transaksi ready stock.');
+      }
+      if (order.orderItems.some((item) => item.product.shop?.user?.id !== userId)) {
+        throw new ForbiddenException('Anda tidak memiliki akses untuk membatalkan pesanan ini.');
+      }
+
+      for (const item of order.orderItems) {
+        const product = await queryRunner.manager
+          .createQueryBuilder(Product, 'product')
+          .setLock('pessimistic_write')
+          .where('product.id = :productId', { productId: item.product.id })
+          .getOne();
+        if (product) {
+          product.stock += item.quantity;
+          await queryRunner.manager.save(Product, product);
+        }
+      }
+
+      order.status = orderStatus.CANCEL;
+      await queryRunner.manager.save(Order, order);
+      buyerId = order.user.id;
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      if (queryRunner.isTransactionActive) await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+
+    if (buyerId) {
+      await this.notificationService.createInAppNotification({
+        userId: buyerId,
+        title: 'Transaksi langsung dibatalkan toko',
+        message: 'Toko membatalkan transaksi Hubungi petani. Stok produk dikembalikan ke toko.',
+        type: 'order_cancelled',
+        severity: 'warning',
+        targetUrl: '/pesanan',
+        metadata: { orderId },
+      });
+    }
+    return { message: 'Transaksi langsung dibatalkan dan stok ready stock dikembalikan.' };
+  }
+
   async getBookedOrders(userId: number) {
-    return this.bookedOrderRepo.find({ where: { userId }, relations: { product: true }, order: { createdAt: 'DESC' } });
+    const bookings = await this.bookedOrderRepo.find({ where: { userId }, relations: { product: true }, order: { createdAt: 'DESC' } });
+    const orderIds = bookings.flatMap((booking) => booking.orderId ? [booking.orderId] : []);
+    const balanceOrders = orderIds.length ? await this.orderRepo.find({ where: { id: In(orderIds) } }) : [];
+    const balanceOrdersById = new Map(balanceOrders.map((order) => [order.id, order]));
+
+    return bookings.map((booking) => {
+      const balanceOrder = booking.orderId ? balanceOrdersById.get(booking.orderId) : undefined;
+      const isOrderConfirmed = balanceOrder?.status === orderStatus.COMPLETED
+        && balanceOrder.buyer_confirmed
+        && balanceOrder.seller_confirmed;
+      return {
+        ...booking,
+        status: booking.status === bookedOrderStatus.COMPLETED && balanceOrder && !isOrderConfirmed
+          ? bookedOrderStatus.PAYMENT_CREATED
+          : booking.status,
+        balancePaymentStatus: balanceOrder?.status ?? null,
+      };
+    });
+  }
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async expireUnpaidPreorderDeposits() {
+    const expired = await this.bookedOrderRepo.find({
+      where: {
+        status: bookedOrderStatus.WAITING_DEPOSIT,
+        depositExpiresAt: LessThanOrEqual(new Date()),
+      },
+      select: { depositMidtransOrderId: true },
+    });
+
+    for (const booking of expired) {
+      if (booking.depositMidtransOrderId) {
+        await this.processPreorderDepositStatus(booking.depositMidtransOrderId, 'expire');
+      }
+    }
+  }
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async expireHarvestedPreorders() {
+    const bookings = await this.bookedOrderRepo.find({
+      where: { status: In([bookedOrderStatus.HARVESTED, bookedOrderStatus.PAYMENT_CREATED]) },
+    });
+    const now = Date.now();
+    for (const booking of bookings) {
+      const deadline = booking.expiresAt?.getTime()
+        ?? (booking.harvestedAt ? booking.harvestedAt.getTime() + 72 * 60 * 60 * 1000 : null);
+      if (deadline !== null && deadline <= now) {
+        if (booking.status === bookedOrderStatus.PAYMENT_CREATED && booking.orderId) {
+          const balanceOrder = await this.orderRepo.findOne({ where: { id: booking.orderId } });
+          if (balanceOrder?.status === orderStatus.PENDING) {
+            await this.syncPendingOrder(balanceOrder);
+          }
+        }
+        await this.expireHarvestedBooking(booking.id);
+      }
+    }
+  }
+
+  private async expireHarvestedBooking(bookedOrderId: number) {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    let expiredBooking: BookedOrder | null = null;
+    let balanceOrderToCancel: Order | null = null;
+    let expiredProductName = 'produk pre-order';
+    try {
+      const booking = await queryRunner.manager.findOne(BookedOrder, {
+        where: { id: bookedOrderId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!booking || ![bookedOrderStatus.HARVESTED, bookedOrderStatus.PAYMENT_CREATED].includes(booking.status)) {
+        await queryRunner.commitTransaction();
+        return false;
+      }
+
+      const deadline = booking.expiresAt?.getTime()
+        ?? (booking.harvestedAt ? booking.harvestedAt.getTime() + 72 * 60 * 60 * 1000 : null);
+      if (deadline === null || deadline > Date.now()) {
+        await queryRunner.commitTransaction();
+        return false;
+      }
+
+      if (booking.status === bookedOrderStatus.PAYMENT_CREATED && booking.orderId) {
+        balanceOrderToCancel = await queryRunner.manager.findOne(Order, {
+          where: { id: booking.orderId },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (balanceOrderToCancel?.status === orderStatus.PAID) {
+          booking.status = bookedOrderStatus.COMPLETED;
+          booking.balancePaymentUrl = null;
+          await queryRunner.manager.save(BookedOrder, booking);
+          await queryRunner.commitTransaction();
+          return false;
+        }
+      }
+
+      const product = await queryRunner.manager
+        .createQueryBuilder(Product, 'product')
+        .setLock('pessimistic_write')
+        .where('product.id = :productId', { productId: booking.productId })
+        .getOne();
+      if (!product) throw new NotFoundException('Produk pre-order tidak ditemukan.');
+      expiredProductName = product.name;
+
+      if (balanceOrderToCancel) {
+        if (balanceOrderToCancel?.status === orderStatus.PENDING || balanceOrderToCancel?.status === orderStatus.CHALLENGE) {
+          balanceOrderToCancel.status = orderStatus.CANCEL;
+          await queryRunner.manager.save(Order, balanceOrderToCancel);
+        }
+      }
+
+      product.po_booked_kg = Math.max(0, product.po_booked_kg - booking.quantity);
+      await queryRunner.manager.save(Product, product);
+      booking.status = bookedOrderStatus.EXPIRED;
+      booking.balancePaymentUrl = null;
+      if (!booking.expiresAt && booking.harvestedAt) {
+        booking.expiresAt = new Date(booking.harvestedAt.getTime() + 72 * 60 * 60 * 1000);
+      }
+      await queryRunner.manager.save(BookedOrder, booking);
+      expiredBooking = booking;
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      if (queryRunner.isTransactionActive) await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+
+    if (balanceOrderToCancel && (balanceOrderToCancel.status === orderStatus.CANCEL || balanceOrderToCancel.status === orderStatus.PENDING || balanceOrderToCancel.status === orderStatus.CHALLENGE)) {
+      const transactionId = balanceOrderToCancel.midtransTransactionId || balanceOrderToCancel.midtransOrderId;
+      try {
+        await this.coreApi.transaction.cancel(transactionId);
+      } catch (error: any) {
+        this.logger.warn(`Gagal membatalkan pembayaran pelunasan Midtrans ${balanceOrderToCancel.midtransOrderId} setelah tenggat preorder: ${error.message}`);
+      }
+    }
+    if (expiredBooking) {
+      await this.notificationService.createInAppNotification({
+        userId: expiredBooking.userId,
+        title: 'Tenggat pelunasan pre-order terlewat',
+        message: `DP untuk ${expiredProductName} hangus karena pelunasan tidak dibayar dalam 3x24 jam sejak panen. Stok sudah kembali tersedia.`,
+        type: 'preorder_expired',
+        severity: 'danger',
+        targetUrl: '/pre-order',
+        metadata: { bookedOrderId: expiredBooking.id },
+      });
+    }
+    return Boolean(expiredBooking);
+  }
+
+  private async processPreorderDepositStatus(
+    midtransOrderId: string,
+    transactionStatus: string,
+    fraudStatus?: string,
+    transactionId?: string,
+  ) {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    let buyerNotification: { userId: number; title: string; message: string; severity: 'safe' | 'warning' | 'danger' } | null = null;
+    let sellerNotification: { userId: number; title: string; message: string } | null = null;
+    let lateDepositRefund: { bookingId: number; transactionId: string } | null = null;
+
+    try {
+      const booking = await queryRunner.manager.findOne(BookedOrder, {
+        where: { depositMidtransOrderId: midtransOrderId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!booking) {
+        await queryRunner.commitTransaction();
+        return { status: 'success' };
+      }
+      const bookingProduct = await queryRunner.manager.findOne(Product, {
+        where: { id: booking.productId },
+        relations: { shop: { user: true } },
+      });
+      if (!bookingProduct) throw new NotFoundException('Produk pre-order tidak ditemukan.');
+      booking.product = bookingProduct;
+
+      if (transactionId && !booking.depositMidtransTransactionId) {
+        booking.depositMidtransTransactionId = transactionId;
+      }
+
+      const isPaid = transactionStatus === 'settlement' || (transactionStatus === 'capture' && fraudStatus === 'accept');
+      const isFailed = ['cancel', 'deny', 'expire', 'failure'].includes(transactionStatus);
+      if (booking.status !== bookedOrderStatus.WAITING_DEPOSIT || !bookingProduct.is_pre_order) {
+        if (isPaid && booking.depositStatus !== 'paid') {
+          const depositOrder = await queryRunner.manager.findOne(Order, {
+            where: { midtransOrderId },
+          });
+          if (depositOrder) {
+            depositOrder.status = orderStatus.CANCEL;
+            depositOrder.midtransTransactionId = transactionId || depositOrder.midtransTransactionId;
+            depositOrder.last_midtrans_webhook_status = transactionStatus;
+            await queryRunner.manager.save(Order, depositOrder);
+          }
+          if (transactionId) {
+            lateDepositRefund = { bookingId: booking.id, transactionId };
+          } else {
+            this.logger.error(`DP preorder booking #${booking.id} dibayar setelah tidak berlaku tetapi Midtrans tidak mengirim transaction_id; refund perlu ditindaklanjuti manual.`);
+          }
+        }
+        if (booking.status === bookedOrderStatus.WAITING_DEPOSIT) {
+          booking.status = bookedOrderStatus.EXPIRED;
+          booking.depositStatus = isPaid ? 'expired' : (isFailed ? 'expired' : booking.depositStatus);
+          booking.depositExpiresAt = null;
+        }
+        await queryRunner.manager.save(BookedOrder, booking);
+        await queryRunner.commitTransaction();
+        if (lateDepositRefund) {
+          try {
+            await this.coreApi.transaction.refund(lateDepositRefund.transactionId, {
+              refund_key: `expired-preorder-deposit-${lateDepositRefund.bookingId}`,
+            });
+          } catch (error: any) {
+            this.logger.error(`Gagal mengembalikan DP preorder yang dibayar setelah produk panen/booking kedaluwarsa (booking #${lateDepositRefund.bookingId}, transaction ${lateDepositRefund.transactionId}): ${error.message}`);
+          }
+        }
+        return { status: 'success' };
+      }
+
+      const depositOrder = await this.createPreorderDepositOrder(
+        queryRunner.manager,
+        booking,
+        booking.product,
+        midtransOrderId,
+      );
+      if (transactionId) depositOrder.midtransTransactionId = transactionId;
+      depositOrder.last_midtrans_webhook_status = transactionStatus;
+      if (isPaid) depositOrder.status = orderStatus.PAID;
+      else if (isFailed) depositOrder.status = orderStatus.CANCEL;
+      await queryRunner.manager.save(Order, depositOrder);
+
+      if (isPaid) {
+        const product = await queryRunner.manager
+          .createQueryBuilder(Product, 'product')
+          .setLock('pessimistic_write')
+          .where('product.id = :productId', { productId: booking.productId })
+          .getOne();
+        if (!product) throw new NotFoundException('Produk pre-order tidak ditemukan.');
+
+        product.po_booked_kg += booking.quantity;
+        await queryRunner.manager.save(Product, product);
+        booking.depositStatus = 'paid';
+        booking.status = product.is_pre_order ? bookedOrderStatus.BOOKED : bookedOrderStatus.HARVESTED;
+        if (booking.status === bookedOrderStatus.HARVESTED) booking.harvestedAt ||= new Date();
+        booking.depositExpiresAt = null;
+        buyerNotification = {
+          userId: booking.userId,
+          title: 'DP pre-order berhasil dibayar',
+          message: `DP 30% untuk ${booking.product.name} sudah diterima. Stok berhasil dikunci.`,
+          severity: 'safe',
+        };
+        const sellerUserId = booking.product.shop?.user?.id;
+        if (sellerUserId) {
+          sellerNotification = {
+            userId: sellerUserId,
+            title: 'Pre-order dengan DP baru masuk',
+            message: `DP 30% untuk pre-order ${booking.product.name} sudah dibayar.`,
+          };
+        }
+      } else if (isFailed) {
+        booking.depositStatus = transactionStatus === 'expire' ? 'expired' : 'failed';
+        booking.status = transactionStatus === 'expire' ? bookedOrderStatus.EXPIRED : bookedOrderStatus.CANCELLED;
+        booking.depositExpiresAt = null;
+        buyerNotification = {
+          userId: booking.userId,
+          title: 'DP pre-order belum dibayar',
+          message: `Pembayaran DP untuk ${booking.product.name} tidak berhasil. Tidak ada stok yang dikunci.`,
+          severity: 'warning',
+        };
+      }
+
+      await queryRunner.manager.save(BookedOrder, booking);
+      await queryRunner.commitTransaction();
+
+      if (buyerNotification) {
+        await this.notificationService.createInAppNotification({
+          ...buyerNotification,
+          type: 'preorder_payment',
+          targetUrl: '/pre-order',
+          metadata: { bookedOrderId: booking.id },
+        });
+      }
+      if (sellerNotification) {
+        await this.notificationService.createInAppNotification({
+          ...sellerNotification,
+          type: 'preorder_booked',
+          severity: 'warning',
+          targetUrl: '/toko/pesanan',
+          metadata: { bookedOrderId: booking.id },
+        });
+      }
+      return { status: 'success' };
+    } catch (error) {
+      if (queryRunner.isTransactionActive) await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async confirmBookedOrder(userId: number, bookedOrderId: number) {
     const bookedOrder = await this.bookedOrderRepo.findOne({
-      where: { id: bookedOrderId, userId, status: bookedOrderStatus.HARVESTED },
-      relations: { product: true },
+      where: { id: bookedOrderId, userId },
+      relations: { product: true, user: true },
     });
-    if (!bookedOrder) throw new BadRequestException('Booked order belum siap dikonfirmasi atau sudah diproses.');
+    if (!bookedOrder) throw new NotFoundException('Pre-order tidak ditemukan.');
+    if (bookedOrder.depositStatus !== 'paid') throw new BadRequestException('DP 30% harus berhasil dibayar sebelum menunggu panen.');
+    if (bookedOrder.shippingMethod !== ShippingMethod.PICKUP) throw new BadRequestException('Pre-order hanya dapat diselesaikan dengan Pickup.');
 
-    const midtransOrderId = `O-${userId}-${Date.now()}-${randomUUID().replace(/-/g, '').slice(0, 5)}`;
-    const isDirectContact = bookedOrder.shippingMethod === ShippingMethod.DIRECT_CONTACT;
+    const paymentDeadline = bookedOrder.expiresAt?.getTime()
+      ?? (bookedOrder.harvestedAt ? bookedOrder.harvestedAt.getTime() + 72 * 60 * 60 * 1000 : null);
+    if (paymentDeadline !== null && paymentDeadline <= Date.now()) {
+      await this.expireHarvestedBooking(bookedOrder.id);
+      throw new BadRequestException('Tenggat pelunasan 3x24 jam sudah lewat. DP hangus dan stok telah dilepas.');
+    }
+
+    if (bookedOrder.status === bookedOrderStatus.PAYMENT_CREATED && bookedOrder.orderId) {
+      const existingOrder = await this.orderRepo.findOne({ where: { id: bookedOrder.orderId } });
+      return {
+        message: 'Pembayaran pelunasan sudah dibuat.',
+        orderId: bookedOrder.orderId,
+        paymentURL: bookedOrder.balancePaymentUrl || existingOrder?.snap_redirect_url || null,
+        paymentToken: null,
+        depositAmount: bookedOrder.depositAmount,
+        remainingAmount: bookedOrder.remainingAmount,
+      };
+    }
+    if (bookedOrder.status !== bookedOrderStatus.HARVESTED) {
+      throw new BadRequestException('Pelunasan tersedia setelah produk pre-order dipanen.');
+    }
+    if (bookedOrder.remainingAmount < 1) throw new BadRequestException('Sisa pelunasan tidak valid. Hubungi admin.');
+
+    const midtransOrderId = `PO-BAL-${bookedOrder.id}-${randomUUID().replace(/-/g, '').slice(0, 8)}`;
+    const transaction = await this.snap.createTransaction({
+      transaction_details: { order_id: midtransOrderId, gross_amount: bookedOrder.remainingAmount },
+      item_details: [{
+        id: `balance-${bookedOrder.id}`,
+        price: bookedOrder.remainingAmount,
+        quantity: 1,
+        name: `Pelunasan pre-order ${bookedOrder.product.name}`.substring(0, 50),
+      }],
+      credit_card: { secure: true },
+      customer_details: {
+        first_name: bookedOrder.recipientName,
+        email: bookedOrder.user.email,
+        phone: bookedOrder.recipientPhoneNumber,
+      },
+      expiry: { unit: 'day', duration: 1 },
+      callbacks: { finish: `${this.frontendUrl}/pre-order` },
+    });
+
     const order = await this.orderRepo.save(this.orderRepo.create({
       user: { id: userId },
-      status: isDirectContact ? orderStatus.COMPLETED : orderStatus.PENDING,
+      status: orderStatus.PENDING,
       total_price: bookedOrder.totalPrice,
+      payment_amount: bookedOrder.remainingAmount,
+      preorder_deposit_amount: bookedOrder.depositAmount,
       recipient_name: bookedOrder.recipientName,
       recipient_phone_number: bookedOrder.recipientPhoneNumber,
       recipient_address: bookedOrder.recipientAddress,
-      shipping_method: bookedOrder.shippingMethod,
+      shipping_method: ShippingMethod.PICKUP,
       midtransOrderId,
-      buyer_confirmed: isDirectContact,
-      seller_confirmed: isDirectContact,
+      snap_redirect_url: transaction.redirect_url,
+      buyer_confirmed: false,
+      seller_confirmed: false,
     }));
     await this.dataSource.manager.save(OrderItems, this.dataSource.manager.create(OrderItems, {
       quantity: bookedOrder.quantity,
@@ -794,53 +1472,111 @@ export class OrderService {
       order: { id: order.id },
     }));
 
-    if (isDirectContact) {
-      bookedOrder.product.stock = Math.max(0, bookedOrder.product.stock - bookedOrder.quantity);
-      bookedOrder.product.po_booked_kg = Math.max(0, bookedOrder.product.po_booked_kg - bookedOrder.quantity);
-      await this.prodRepo.save(bookedOrder.product);
-    }
-
-    const transaction = isDirectContact ? null : await this.snap.createTransaction({
-      transaction_details: { order_id: midtransOrderId, gross_amount: bookedOrder.totalPrice },
-      item_details: [{ id: String(bookedOrder.productId), price: bookedOrder.product.price, quantity: bookedOrder.quantity, name: bookedOrder.product.name }],
-      customer_details: { first_name: bookedOrder.recipientName, phone: bookedOrder.recipientPhoneNumber, address: bookedOrder.recipientAddress },
-      shipping_address: { first_name: bookedOrder.recipientName, phone: bookedOrder.recipientPhoneNumber, address: bookedOrder.recipientAddress },
-      expiry: { unit: 'day', duration: 1 },
-      callbacks: { finish: `${this.frontendUrl}/pesanan/${order.id}` },
-    });
-    if (transaction) order.snap_redirect_url = transaction.redirect_url;
-    await this.orderRepo.save(order);
     bookedOrder.status = bookedOrderStatus.PAYMENT_CREATED;
     bookedOrder.orderId = order.id;
+    bookedOrder.balancePaymentUrl = transaction.redirect_url;
     await this.bookedOrderRepo.save(bookedOrder);
-    return { message: isDirectContact ? 'Pesanan langsung berhasil dicatat.' : 'Payment berhasil dibuat.', orderId: order.id, paymentURL: transaction?.redirect_url || null, paymentToken: transaction?.token || null };
+    return {
+      message: 'Pembayaran pelunasan berhasil dibuat.',
+      orderId: order.id,
+      paymentURL: transaction.redirect_url,
+      paymentToken: transaction.token,
+      totalPrice: bookedOrder.totalPrice,
+      depositAmount: bookedOrder.depositAmount,
+      remainingAmount: bookedOrder.remainingAmount,
+    };
   }
 
   async cancelBookedOrder(userId: number, bookedOrderId: number) {
-    const bookedOrder = await this.bookedOrderRepo.findOne({ where: { id: bookedOrderId, userId }, relations: { product: true } });
-    if (!bookedOrder) throw new NotFoundException('Booked order tidak ditemukan');
-    if (bookedOrder.status !== bookedOrderStatus.BOOKED && bookedOrder.status !== bookedOrderStatus.HARVESTED) {
-      throw new BadRequestException('Booked order ini sudah tidak dapat dibatalkan.');
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    let sellerUserId: number | undefined;
+    let cancelledBooking: BookedOrder | null = null;
+    try {
+      const bookedOrder = await queryRunner.manager.findOne(BookedOrder, {
+        where: { id: bookedOrderId, userId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!bookedOrder) throw new NotFoundException('Booked order tidak ditemukan');
+      cancelledBooking = bookedOrder;
+      if (bookedOrder.depositStatus !== 'paid') throw new BadRequestException('Pre-order hanya bisa dibatalkan setelah DP berhasil dibayar.');
+      if (bookedOrder.status !== bookedOrderStatus.BOOKED && bookedOrder.status !== bookedOrderStatus.HARVESTED) {
+        throw new BadRequestException('Booked order ini sudah tidak dapat dibatalkan.');
+      }
+
+      const productDetails = await queryRunner.manager.findOne(Product, {
+        where: { id: bookedOrder.productId },
+        relations: { shop: { user: true } },
+      });
+      if (!productDetails) throw new NotFoundException('Produk pre-order tidak ditemukan.');
+
+      const product = await queryRunner.manager
+        .createQueryBuilder(Product, 'product')
+        .setLock('pessimistic_write')
+        .where('product.id = :productId', { productId: bookedOrder.productId })
+        .getOne();
+      if (!product) throw new NotFoundException('Produk pre-order tidak ditemukan.');
+
+      bookedOrder.status = bookedOrderStatus.CANCELLED;
+      product.po_booked_kg = Math.max(0, product.po_booked_kg - bookedOrder.quantity);
+      await queryRunner.manager.save(Product, product);
+      await queryRunner.manager.save(BookedOrder, bookedOrder);
+      bookedOrder.product = productDetails;
+      sellerUserId = productDetails.shop?.user?.id;
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      if (queryRunner.isTransactionActive) await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
-    bookedOrder.status = bookedOrderStatus.CANCELLED;
-    bookedOrder.product.po_booked_kg = Math.max(0, bookedOrder.product.po_booked_kg - bookedOrder.quantity);
-    await this.prodRepo.save(bookedOrder.product);
-    await this.bookedOrderRepo.save(bookedOrder);
-    return { message: 'Booked order berhasil dibatalkan.' };
+
+    if (sellerUserId && cancelledBooking) {
+      await this.notificationService.createInAppNotification({
+        userId: sellerUserId,
+        title: 'Pre-order dibatalkan pembeli',
+        message: `Pre-order ${cancelledBooking.product.name} sebanyak ${cancelledBooking.quantity} kg dibatalkan. Kuota/stok telah dilepas; DP tidak dikembalikan.`,
+        type: 'preorder_cancelled',
+        severity: 'warning',
+        targetUrl: '/toko/pesanan',
+        metadata: { bookedOrderId: cancelledBooking.id },
+      });
+    }
+    return { message: 'Pre-order dibatalkan. DP 30% tidak dapat dikembalikan; kuota/stok panen telah dilepas.' };
   }
 
   async markProductHarvested(productId: number, harvestedAt = new Date()) {
-    const bookedOrders = await this.bookedOrderRepo.find({ where: { productId, status: bookedOrderStatus.BOOKED }, relations: { product: true } });
+    const bookedOrders = await this.bookedOrderRepo.find({
+      where: { productId, status: In([bookedOrderStatus.BOOKED, bookedOrderStatus.WAITING_DEPOSIT]) },
+      relations: { product: true },
+    });
     for (const bookedOrder of bookedOrders) {
-      bookedOrder.status = bookedOrderStatus.HARVESTED;
-      bookedOrder.harvestedAt = harvestedAt;
+      if (bookedOrder.depositStatus === 'paid') {
+        bookedOrder.status = bookedOrderStatus.HARVESTED;
+        bookedOrder.harvestedAt = harvestedAt;
+        bookedOrder.expiresAt = new Date(harvestedAt.getTime() + 72 * 60 * 60 * 1000);
+      } else {
+        bookedOrder.status = bookedOrderStatus.EXPIRED;
+        bookedOrder.depositStatus = 'expired';
+        bookedOrder.depositExpiresAt = null;
+      }
       await this.bookedOrderRepo.save(bookedOrder);
+      if (bookedOrder.depositStatus !== 'paid' && bookedOrder.orderId) {
+        await this.orderRepo.update(
+          { id: bookedOrder.orderId, status: In([orderStatus.PENDING, orderStatus.CHALLENGE]) },
+          { status: orderStatus.CANCEL },
+        );
+      }
       await this.notificationService.createInAppNotification({
         userId: bookedOrder.userId,
-        title: 'Pre-order sudah panen',
-        message: `Produk ${bookedOrder.product.name} sudah dipanen. Konfirmasi untuk melanjutkan pembayaran atau batalkan booked order.`,
+        title: bookedOrder.depositStatus === 'paid' ? 'Pre-order sudah panen' : 'Pre-order sudah panen sebelum DP dibayar',
+        message: bookedOrder.depositStatus === 'paid'
+          ? `Produk ${bookedOrder.product.name} sudah dipanen. Lunasi dalam 3x24 jam agar stok tetap dikunci.`
+          : `Produk ${bookedOrder.product.name} sudah dipanen sebelum DP dibayar. Booking DP dibatalkan; silakan pesan kembali dengan alur ready stock.`,
         type: 'preorder_harvested',
-        severity: 'warning',
+        severity: bookedOrder.depositStatus === 'paid' ? 'warning' : 'danger',
         targetUrl: '/pre-order',
         metadata: { bookedOrderId: bookedOrder.id },
       });
@@ -891,12 +1627,33 @@ export class OrderService {
     try {
       let statusResponse: any;
       try {
-        statusResponse = await this.snap.transaction.notification(notificationDto);
+        if (notificationDto?.payment_type?.toLowerCase() === 'dana') {
+          const transactionId = notificationDto?.transaction_id;
+          if (!transactionId) throw new BadRequestException('Webhook DANA tidak memiliki transaction_id.');
+
+          const baseUrl = this.isProduction
+            ? 'https://api.midtrans.com'
+            : 'https://api.sandbox.midtrans.com';
+          const response = await axios.get(
+            `${baseUrl}/v2/${encodeURIComponent(transactionId)}/status`,
+            {
+              auth: { username: this.midtransServerKey, password: '' },
+              headers: { 'transaction-source': 'SNAP_API' },
+            },
+          );
+          statusResponse = response.data;
+
+          if (midtransOrderId && statusResponse?.order_id && statusResponse.order_id !== midtransOrderId) {
+            throw new BadRequestException('Order ID webhook DANA tidak cocok dengan status transaksi Midtrans.');
+          }
+        } else {
+          statusResponse = await this.snap.transaction.notification(notificationDto);
+        }
       } catch (snapError: any) {
         this.logger.warn(
-          `Snap transaction.notification gagal (${snapError.message}). Mencoba parse dari payload webhook langsung...`,
+          `Verifikasi notifikasi Midtrans gagal (${snapError.message}). Payload webhook ditolak.`,
         );
-        statusResponse = notificationDto;
+        throw snapError;
       }
 
       if (!midtransOrderId && !midtransTransactionId) {
@@ -910,6 +1667,16 @@ export class OrderService {
       this.logger.log(
         `Webhook Midtrans (verified): order_id=${midtransOrderId}, tx_id=${midtransTransactionId}, transaction_status=${transactionStatus}, fraud_status=${fraudStatus}`,
       );
+
+      const verifiedOrderId = statusResponse?.order_id || midtransOrderId;
+      if (typeof verifiedOrderId === 'string' && verifiedOrderId.startsWith('PO-DP-')) {
+        return await this.processPreorderDepositStatus(
+          verifiedOrderId,
+          transactionStatus,
+          fraudStatus,
+          midtransTransactionId,
+        );
+      }
 
       let order: Order | null = null;
       let matchedBy: string | null = null;
@@ -990,6 +1757,33 @@ export class OrderService {
       await queryRunner.startTransaction();
 
       try {
+        const linkedBalanceBooking = order.midtransOrderId.startsWith('PO-BAL-')
+          ? await queryRunner.manager.findOne(BookedOrder, {
+              where: { orderId: order.id },
+              lock: { mode: 'pessimistic_write' },
+            })
+          : null;
+        if (linkedBalanceBooking?.status === bookedOrderStatus.EXPIRED && statusOrder === orderStatus.PAID) {
+          await queryRunner.manager.update(Order, order.id, {
+            status: orderStatus.CANCEL,
+            midtransTransactionId: midtransTransactionId || order.midtransTransactionId,
+          });
+          await queryRunner.commitTransaction();
+          const refundTransactionId = midtransTransactionId || order.midtransTransactionId;
+          if (refundTransactionId) {
+            try {
+              await this.coreApi.transaction.refund(refundTransactionId, {
+                refund_key: `expired-preorder-balance-${linkedBalanceBooking.id}`,
+              });
+            } catch (error: any) {
+              this.logger.error(`Gagal mengembalikan pelunasan preorder yang masuk setelah tenggat (booking #${linkedBalanceBooking.id}, transaction ${refundTransactionId}): ${error.message}`);
+            }
+          } else {
+            this.logger.error(`Pelunasan preorder booking #${linkedBalanceBooking.id} dibayar setelah stok dilepas tetapi transaction_id tidak tersedia; refund perlu ditindaklanjuti manual.`);
+          }
+          return { status: 'success' };
+        }
+
         const updateFields: any = { status: statusOrder };
         if (!order.midtransTransactionId && midtransTransactionId) {
           updateFields.midtransTransactionId = midtransTransactionId;
@@ -1020,12 +1814,25 @@ export class OrderService {
               });
             }
 
-            await queryRunner.manager.delete(CartItems, {
-              cart: { user: { id: order.user.id } },
-              product: { id: product.id },
-            });
           }
           this.logger.log(`Inventory deduction selesai untuk order #${order.id}`);
+        }
+
+        const balanceBooking = await queryRunner.manager.findOne(BookedOrder, {
+          where: { orderId: order.id },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (balanceBooking?.status === bookedOrderStatus.PAYMENT_CREATED) {
+          if (statusOrder === orderStatus.PAID) {
+            balanceBooking.status = bookedOrderStatus.COMPLETED;
+            balanceBooking.balancePaymentUrl = null;
+            await queryRunner.manager.save(BookedOrder, balanceBooking);
+          } else if (statusOrder === orderStatus.CANCEL) {
+            balanceBooking.status = bookedOrderStatus.HARVESTED;
+            balanceBooking.orderId = null;
+            balanceBooking.balancePaymentUrl = null;
+            await queryRunner.manager.save(BookedOrder, balanceBooking);
+          }
         }
         await queryRunner.commitTransaction();
         return { status: 'success' };
@@ -1040,7 +1847,10 @@ export class OrderService {
         `Webhook Midtrans error (order_id=${midtransOrderId}, tx_id=${midtransTransactionId}): ${error?.message || JSON.stringify(error)}`,
         error?.stack,
       );
-      return { status: 'error', message: error?.message || 'Unknown error' };
+      const message = error instanceof Error ? error.message : JSON.stringify(error);
+      throw new InternalServerErrorException(
+        this.isProduction ? 'Gagal memproses webhook Midtrans.' : `Gagal memproses webhook Midtrans: ${message}`,
+      );
     }
   }
 }
