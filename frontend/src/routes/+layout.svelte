@@ -12,7 +12,11 @@
 	import { disablePushNotifications, enablePushNotifications, getNotificationPermission, syncPushToken } from '$lib/services/notificationService';
 
 	let { children } = $props();
-	let isAuthRoute = $derived(['/signin', '/signup', '/forgot-password'].includes($page.url.pathname));
+	const authRoutes = new Set(['/signin', '/signup', '/forgot-password']);
+	function isAuthPath(pathname: string) {
+		return authRoutes.has(pathname.replace(/\/+$/, '') || '/');
+	}
+	let isAuthRoute = $derived(isAuthPath($page.url.pathname));
 
 	let currentUser = $state<CurrentUserDto | null>(null);
 	if (browser) applyStoredAccountTheme();
@@ -32,9 +36,13 @@
 		{ href: '/lahan-tani', label: 'Lahan Tani' },
 		{ href: '/komoditas', label: 'Komoditas' },
 		{ href: '/toko', label: 'Toko' },
-		{ href: '/tentang-kami', label: 'Tentang Kami' },
 	];
-	let navLinks = $derived(currentUser?.role === 'admin' ? [...baseNavLinks, { href: '/admin', label: 'Admin' }] : baseNavLinks);
+	const aboutNavLink = { href: '/tentang-kami', label: 'Tentang Kami' };
+	let navLinks = $derived([
+		...baseNavLinks,
+		...(currentUser?.role === 'admin' ? [{ href: '/admin', label: 'Admin' }] : []),
+		aboutNavLink,
+	]);
 
 	let headerHidden = $state(false);
 	let headerFading = $state(false);
@@ -68,7 +76,7 @@
 		try {
 			currentUser = await getCurrentUser();
 			applyAccountTheme(currentUser);
-			if (['/signin', '/signup', '/forgot-password'].includes(pathname) && $page.url.pathname === pathname) {
+			if (isAuthPath(pathname) && isAuthPath($page.url.pathname)) {
 				if (!authRedirectStarted) {
 					authRedirectStarted = true;
 					await goto('/dashboard', { replaceState: true });
@@ -219,20 +227,25 @@
 
 	function horizontalWheelScroll(node: HTMLElement) {
 		function onWheel(event: WheelEvent) {
+			const target = event.target;
+			const nav = target instanceof Element ? target.closest<HTMLElement>('.navigasi-utama') : null;
+			if (!nav || !node.contains(nav)) {
+				event.preventDefault();
+				return;
+			}
+
 			if (window.matchMedia('(max-width: 1180px)').matches) return;
+
 			event.preventDefault();
 
-			const target = event.target;
-			if (!(target instanceof Element)) return;
-			const nav = target.closest<HTMLElement>('.main-nav');
-			if (!nav || !node.contains(nav)) return;
-
 			const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
-			nav.scrollLeft = Math.max(0, Math.min(nav.scrollWidth - nav.clientWidth, nav.scrollLeft + delta));
+			const maxScrollLeft = nav.scrollWidth - nav.clientWidth;
+			const nextScrollLeft = Math.max(0, Math.min(maxScrollLeft, nav.scrollLeft + delta));
+			nav.scrollLeft = nextScrollLeft;
 		}
 
-		node.addEventListener('wheel', onWheel, { passive: false });
-		return { destroy: () => node.removeEventListener('wheel', onWheel) };
+		node.addEventListener('wheel', onWheel, { passive: false, capture: true });
+		return { destroy: () => node.removeEventListener('wheel', onWheel, { capture: true }) };
 	}
 
 	let initials = $derived(currentUser?.email?.slice(0, 1).toUpperCase() || 'G');
@@ -251,7 +264,7 @@
 				<img class="penanda-merek" src="/tani-siaga-logo.svg" alt="" />
 				<span class="teks-merek">Tani Siaga</span>
 			</a>
-			<button class="alih-navigasi" type="button" aria-label={mobileNavOpen ? 'Tutup navigasi' : 'Buka navigasi'} aria-expanded={mobileNavOpen} aria-controls="primary-navigation" onclick={() => (mobileNavOpen = !mobileNavOpen)}>
+			<button class="alih-navigasi" type="button" aria-label={mobileNavOpen ? 'Tutup navigasi' : 'Buka navigasi'} aria-expanded={mobileNavOpen} aria-controls="navigasi-utama" onclick={() => (mobileNavOpen = !mobileNavOpen)}>
 				<span aria-hidden="true">{mobileNavOpen ? '×' : '☰'}</span>
 			</button>
 			<nav id="navigasi-utama" class="navigasi-utama" class:buka={mobileNavOpen} aria-label="Navigasi utama">
@@ -425,6 +438,7 @@
 		flex: 1 1 0;
 		flex-wrap: nowrap;
 		overflow-x: auto;
+		overscroll-behavior: contain;
 		scrollbar-width: none;
 	}
 	.navigasi-utama::-webkit-scrollbar {

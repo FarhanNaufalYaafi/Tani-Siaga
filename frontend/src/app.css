@@ -217,7 +217,7 @@ html[data-theme='dark'] body .kerangka-aplikasi input::placeholder,
 html[data-theme='dark'] body .kerangka-aplikasi textarea::placeholder {
 	color: #9aa99e !important;
 }
-html[data-theme='dark'] body .kerangka-aplikasi :is(button:not(.matahari):not(.bulan):not(.alih-notifikasi):not(.tombol-tautan), [role='button']:not(.matahari):not(.bulan):not(.alih-notifikasi):not(.tombol-tautan), .aksi-utama, .utama-dialog) {
+html[data-theme='dark'] body .kerangka-aplikasi :is(button:not(.matahari):not(.bulan):not(.alih-notifikasi):not(.tombol-tautan):not([class*='kartu-lahan']), [role='button']:not(.matahari):not(.bulan):not(.alih-notifikasi):not(.tombol-tautan):not([class*='kartu-lahan']), .aksi-utama, .utama-dialog) {
 	background-color: #285b3b !important;
 	border-color: #527b5d !important;
 	color: #fff !important;

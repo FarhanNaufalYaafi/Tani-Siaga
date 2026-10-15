@@ -265,6 +265,10 @@
 	.matahari:disabled {
 		cursor: default;
 	}
+	.matahari:not(:disabled), .bulan.gelap {
+		animation: petunjuk-ubah-tema 5s ease-in-out infinite;
+		will-change: transform;
+	}
 	.matahari:focus-visible, .bulan:focus-visible {
 		outline: 3px solid #39754b;
 		outline-offset: 5px;
@@ -698,11 +702,21 @@
 			transform: translateY(0);
 		}
 	}
+	@keyframes petunjuk-ubah-tema {
+		0%, 54%, 100% { transform: translateY(0) scale(1); }
+		58% { transform: translateY(8px) scale(0.96); }
+		62%, 66% { transform: translateY(0) scale(1); }
+		70% { transform: translateY(8px) scale(0.96); }
+		74% { transform: translateY(0) scale(1); }
+	}
 	@media (prefers-reduced-motion: reduce) {
 		:global(.siap-muncul), .teks-utama {
 			transition: none;
 			animation: none;
 			transform: none;
+		}
+		.matahari:not(:disabled), .bulan.gelap {
+			animation: none;
 		}
 	}
 </style>
